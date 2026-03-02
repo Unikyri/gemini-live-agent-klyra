@@ -1,33 +1,67 @@
-# Klyra - Tutoría Interactiva por IA
+# Klyra - Interactive AI Tutoring
 
-Klyra es una aplicación móvil innovadora respaldada por inteligencia artificial (Gemini) que transforma apuntes y textos estáticos en "clases magistrales" interactivas con un Tutor Avatar utilizando "barge-in" (interrupciones) en tiempo real, inyección de fondos visuales (Graph RAG), y memoria persistente del estudiante.
+Klyra is an innovative, AI-powered mobile application (using Gemini API) that transforms static notes and texts into interactive "masterclasses". It features a Tutor Avatar capable of real-time voice interruptions ("barge-in"), visual background injection (via Graph RAG), and persistent student memory.
 
-## Visión del Producto
-Para estudiantes de nivel medio y superior que necesitan un soporte de aprendizaje personalizado, Klyra ofrece explicaciones ultra-rápidas e inmersivas en tiempo real.
+## Product Vision
+Targeted at middle and higher education students who need personalized learning support, Klyra offers ultra-fast, immersive, real-time explanations directly from their class materials.
 
-## Arquitectura (MVP)
-* **Frontend:** Flutter (Mobile) con soporte de renderizado multicapa para inyección de fondos.
-* **Backend:** Go (Monolito Modular con Clean Architecture) alojado en Google Cloud Run.
-* **Componentes IA:** Gemini Live API (barge-in / audio), Imagen (generación de sprites/avatares), y Vertex AI Vector Search (Graph RAG).
-* **Base de Datos:** PostgreSQL para persistencia de usuarios, perfiles de aprendizaje y referenciación RAG.
-* **Conexiones:** WebSockets (WSS) cliente-servidor para los eventos asíncronos en vivo (fondos), y API REST para gestión de CRUD y carga de archivos.
+## MVP Architecture
+* **Frontend:** Flutter (Mobile) with multi-layer rendering support for background injection.
+* **Backend:** Go (Modular Monolith with Clean Architecture) hosted on Google Cloud Run.
+* **AI Components:** Gemini Live API (barge-in / audio), Imagen (sprite/avatar generation), and Vertex AI Vector Search (Graph RAG).
+* **Database:** PostgreSQL for user persistence, learning profiles, and RAG referencing.
+* **Connectivity:** WebSockets (WSS) client-server for live asynchronous events (backgrounds), and REST API for CRUD management and file uploads.
 
-## Configuración del Entorno de Desarrollo
+## Project Structure
+The repository is structured as a monorepo containing both the frontend and the backend.
 
-### Requisitos Previos
+```
+.
+├── backend/                # Go Backend (Clean Architecture)
+│   ├── cmd/                # Main applications (entry points)
+│   ├── internal/           # Private application and library code
+│   │   ├── core/           # Use cases, domain models, and interfaces
+│   │   ├── handlers/       # HTTP/WebSocket delivery layer
+│   │   └── repositories/   # Database and external API integrations
+│   ├── pkg/                # Library code that's ok to use by external applications
+│   └── migrations/         # PostgreSQL database migrations
+│
+├── mobile/                 # Flutter application
+│   ├── lib/
+│   │   ├── core/           # Common utilities, themes, routing
+│   │   ├── features/       # Feature-based folder structure (Auth, Courses, LiveSession)
+│   │   └── main.dart       # Entry point
+│   ├── assets/             # Local images, fonts, animations
+│   └── test/               # Flutter tests
+│
+├── docs/                   # Additional architecture or API documentation
+├── .agent/                 # AI assistant project rules and configurations
+└── README.md
+```
+
+## Git Strategy
+We adhere to **GitHub Flow (Simplified Trunk Based Development)** favoring Continuous Integration:
+1. The `main` branch is always deployable.
+2. Develop new features or fixes on descriptive feature branches (e.g., `feature/auth-oauth2`, `fix/avatar-sync`).
+3. Commit messages must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification (`feat:`, `fix:`, `chore:`, etc.).
+4. Open a Pull Request against `main` for code review before merging.
+
+## Development Environment Setup
+
+### Prerequisites
 * [Go 1.22+](https://go.dev/doc/install)
 * [Flutter 3.22+](https://docs.flutter.dev/get-started/install)
 * [PostgreSQL 16+](https://www.postgresql.org/download/)
-* Cuenta en [Google Cloud](https://cloud.google.com/) con Vertex AI y Gemini API habilitados.
+* A [Google Cloud](https://cloud.google.com/) account with Vertex AI and Gemini API enabled.
 
-### Instalación Local
-1. Clona este repositorio:
+### Local Installation
+1. Clone this repository:
    ```bash
    git clone https://github.com/Unikyri/gemini-live-agent-klyra.git
    cd gemini-live-agent-klyra
    ```
-2. Configura las variables de entorno basándote en `.env.example`.
-3. Inicia la base de datos local y corre las migraciones correspondientes (a definir en `/backend`).
-4. (Opcional) Instala dependencias para web/mobile dentro de `/mobile`.
+2. Configure environment variables based on `.env.example`.
+3. Start your local database and run the corresponding migrations (defined in `/backend/migrations`).
+4. Set up the mobile app by running `flutter pub get` inside `/mobile`.
 
-_Este repositorio emplea convenciones estrictas de seguridad (ver Threat Model) y control de versión con Trunk Based Development (o GitHub Flow)._
+_This repository enforces strict security conventions (see Threat Model) and code quality standards._
