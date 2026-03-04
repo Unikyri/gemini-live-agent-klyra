@@ -2,7 +2,9 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -85,8 +87,11 @@ func (uc *CourseUseCase) CreateCourse(ctx context.Context, input CreateCourseInp
 // Runs in a separate goroutine — NEVER call synchronously (it would block the HTTP response).
 // NOTE: In production, replace with Cloud Tasks or Pub/Sub for retry guarantees.
 func (uc *CourseUseCase) generateAvatarAsync(courseID, referenceImageURL string) {
-	// New context — the HTTP request context will be cancelled by the time this runs.
-	ctx := context.Background()
+	// WARNING fix: use a bounded context so this goroutine cannot run forever
+	// if the Vertex AI or GCS call hangs indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
 	log.Printf("[Avatar] Starting generation for course %s", courseID)
 
 	// Mark the course as "generating" so the Flutter UI can show a loading indicator.
@@ -148,7 +153,11 @@ func (uc *CourseUseCase) AddTopic(ctx context.Context, courseID, userID, title s
 		return nil, err
 	}
 
-	courseUUID, _ := uuid.Parse(courseID)
+	courseUUID, err := uuid.Parse(courseID)
+	if err != nil {
+		// WARNING fix: return an explicit error instead of silently using a zero UUID.
+		return nil, fmt.Errorf("invalid course ID format: %w", err)
+	}
 	topic := &domain.Topic{
 		CourseID: courseUUID,
 		Title:    title,

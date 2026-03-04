@@ -48,10 +48,17 @@ func (uc *AuthUseCase) GoogleSignIn(ctx context.Context, googleIDToken string) (
 	}
 
 	// Step 2: Find or create the user in our database.
+	// SECURITY (WARNING fix): FindByEmail now returns (nil, nil) for "not found"
+	// and (nil, err) for real DB errors. Treating any error as "not found" could
+	// create duplicate users when the DB is having transient failures.
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		// User not found — create a new one. This is a first-time sign-in.
-		log.Printf("New user signing in: %s. Creating record.", email)
+		// Real database error (timeout, connection failure, etc.) — fail fast.
+		return nil, err
+	}
+	if user == nil {
+		// First-time sign-in — create a new user record.
+		log.Printf("[Auth] New user signing in: %s — creating record.", email)
 		user = &domain.User{
 			Email:           email,
 			Name:            name,
