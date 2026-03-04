@@ -15,6 +15,7 @@ type CourseUseCase struct {
 	courseRepo ports.CourseRepository
 	topicRepo  ports.TopicRepository
 	storage    ports.StorageService
+	avatarGen  ports.AvatarGenerator
 }
 
 // NewCourseUseCase creates a new CourseUseCase with injected dependencies.
@@ -22,11 +23,13 @@ func NewCourseUseCase(
 	courseRepo ports.CourseRepository,
 	topicRepo ports.TopicRepository,
 	storage ports.StorageService,
+	avatarGen ports.AvatarGenerator,
 ) *CourseUseCase {
 	return &CourseUseCase{
 		courseRepo: courseRepo,
 		topicRepo:  topicRepo,
 		storage:    storage,
+		avatarGen:  avatarGen,
 	}
 }
 
@@ -78,21 +81,44 @@ func (uc *CourseUseCase) CreateCourse(ctx context.Context, input CreateCourseInp
 	return course, nil
 }
 
-// generateAvatarAsync is the background worker that calls Imagen for avatar generation.
-// It runs in a separate goroutine — never call this synchronously.
+// generateAvatarAsync is the background worker that calls Imagen and uploads the result.
+// Runs in a separate goroutine — NEVER call synchronously (it would block the HTTP response).
+// NOTE: In production, replace with Cloud Tasks or Pub/Sub for retry guarantees.
 func (uc *CourseUseCase) generateAvatarAsync(courseID, referenceImageURL string) {
-	// We create a new background context since the HTTP request context will be cancelled.
+	// New context — the HTTP request context will be cancelled by the time this runs.
 	ctx := context.Background()
-	log.Printf("Starting avatar generation for course %s", courseID)
+	log.Printf("[Avatar] Starting generation for course %s", courseID)
 
-	// TODO (US3): Replace this log with actual Gemini Imagen API call.
-	// When implemented, it will:
-	// 1. Call Imagen with a prompt based on referenceImageURL.
-	// 2. Receive a transparent-background PNG.
-	// 3. Upload the result to Storage.
-	// 4. Call uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "ready", avatarURL).
-	log.Printf("Avatar generation placeholder for course %s — will be implemented in US3.", courseID)
-	_ = uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "pending", "")
+	// Mark the course as "generating" so the Flutter UI can show a loading indicator.
+	if err := uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "generating", ""); err != nil {
+		log.Printf("[Avatar] Failed to set status=generating for course %s: %v", courseID, err)
+	}
+
+	// Step 1: Call Imagen to generate the transparent avatar PNG.
+	// referenceImageURL is used as a style hint — pass it as the style description.
+	imageBytes, mimeType, err := uc.avatarGen.GenerateAvatar(ctx, referenceImageURL)
+	if err != nil {
+		log.Printf("[Avatar] Imagen generation failed for course %s: %v", courseID, err)
+		_ = uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "failed", "")
+		return
+	}
+
+	// Step 2: Upload the generated PNG to Cloud Storage.
+	objectName := "avatars/" + courseID + "/avatar.png"
+	avatarURL, err := uc.storage.UploadFile(ctx, "", objectName, imageBytes, mimeType)
+	if err != nil {
+		log.Printf("[Avatar] Upload to storage failed for course %s: %v", courseID, err)
+		_ = uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "failed", "")
+		return
+	}
+
+	// Step 3: Update the course record with the avatar URL and "ready" status.
+	if err := uc.courseRepo.UpdateAvatarStatus(ctx, courseID, "ready", avatarURL); err != nil {
+		log.Printf("[Avatar] DB update failed for course %s: %v", courseID, err)
+		return
+	}
+
+	log.Printf("[Avatar] Avatar ready for course %s — URL: %s", courseID, avatarURL)
 }
 
 // GetCoursesByUser retrieves all active courses belonging to a user.

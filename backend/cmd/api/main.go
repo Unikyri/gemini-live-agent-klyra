@@ -52,8 +52,9 @@ func main() {
 	// --- Course wiring ---
 	courseRepo := repositories.NewPostgresCourseRepository(db)
 	topicRepo := repositories.NewPostgresTopicRepository(db)
-	storageSvc := repositories.NewLocalStorageService() // replace with GCS in production
-	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc)
+	storageSvc := repositories.NewGCSStorageService()    // real GCS — uses GOOGLE_APPLICATION_CREDENTIALS
+	imageGenSvc := repositories.NewVertexImagenService() // Imagen 3 on Vertex AI
+	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc, imageGenSvc)
 
 	// --- HTTP Router setup ---
 	router := gin.Default()

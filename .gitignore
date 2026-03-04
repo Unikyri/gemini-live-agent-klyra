@@ -19,6 +19,12 @@ vendor/
 .env.*.local
 *.secret
 
+# Google Cloud Service Account credentials — NEVER commit these!
+# These files contain private keys. Treat them like passwords.
+*.json
+!package.json
+!package-lock.json
+
 # Flutter / Dart
 build/
 .dart_tool/
