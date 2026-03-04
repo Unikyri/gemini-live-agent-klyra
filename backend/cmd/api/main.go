@@ -30,26 +30,30 @@ func main() {
 	}
 	log.Println("Database connection established successfully.")
 
-	// Auto-migrate: This creates or updates tables based on domain models.
-	// For production, use SQL migration files in /migrations instead.
-	if err := db.AutoMigrate(&domain.User{}); err != nil {
+	// Auto-migrate domain models. For production, use SQL files in /migrations.
+	if err := db.AutoMigrate(&domain.User{}, &domain.Course{}, &domain.Topic{}); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
 	// --- Dependency Injection (Composition Root) ---
-	// This is the ONLY place where concrete implementations are wired together.
-	// Think of it as the "startup configuration" of our Clean Architecture tree.
-
-	userRepo := repositories.NewPostgresUserRepository(db)
+	// Only this file knows about concrete implementations.
+	// Use cases and handlers only see interfaces (ports).
 
 	jwtSvc := repositories.NewJWTService(
 		mustEnv("JWT_SECRET"),
 		mustEnv("REFRESH_TOKEN_SECRET"),
 	)
 
+	// --- Auth wiring ---
+	userRepo := repositories.NewPostgresUserRepository(db)
 	googleVerifier := repositories.NewGoogleVerifier(mustEnv("GOOGLE_CLIENT_ID"))
-
 	authUseCase := usecases.NewAuthUseCase(userRepo, jwtSvc, googleVerifier)
+
+	// --- Course wiring ---
+	courseRepo := repositories.NewPostgresCourseRepository(db)
+	topicRepo := repositories.NewPostgresTopicRepository(db)
+	storageSvc := repositories.NewLocalStorageService() // replace with GCS in production
+	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc)
 
 	// --- HTTP Router setup ---
 	router := gin.Default()
@@ -59,17 +63,19 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// API v1 routes
 	v1 := router.Group("/api/v1")
 
-	// Public routes (no auth required)
+	// Public routes (no JWT required)
 	authHandler := httphandlers.NewAuthHandler(authUseCase)
 	authHandler.RegisterRoutes(v1)
 
-	// Protected routes (JWT required) — example structure for future modules
-	// protected := v1.Group("/")
-	// protected.Use(httphandlers.AuthMiddleware(jwtSvc))
-	// courseHandler.RegisterRoutes(protected)
+	// Protected routes — JWT middleware enforces authentication on all sub-routes.
+	protected := v1.Group("/")
+	protected.Use(httphandlers.AuthMiddleware(jwtSvc))
+	{
+		courseHandler := httphandlers.NewCourseHandler(courseUseCase)
+		courseHandler.RegisterRoutes(protected)
+	}
 
 	port := getEnv("PORT", "8080")
 	log.Printf("Klyra Backend starting on port %s", port)
