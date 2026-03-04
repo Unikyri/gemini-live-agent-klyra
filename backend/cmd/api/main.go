@@ -36,7 +36,7 @@ func main() {
 	log.Println("Database connection established successfully.")
 
 	// Auto-migrate domain models. For production, use SQL files in /migrations.
-	if err := db.AutoMigrate(&domain.User{}, &domain.Course{}, &domain.Topic{}); err != nil {
+	if err := db.AutoMigrate(&domain.User{}, &domain.Course{}, &domain.Topic{}, &domain.Material{}); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
@@ -60,6 +60,11 @@ func main() {
 	storageSvc := repositories.NewGCSStorageService()    // real GCS — uses GOOGLE_APPLICATION_CREDENTIALS
 	imageGenSvc := repositories.NewVertexImagenService() // Imagen 3 on Vertex AI
 	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc, imageGenSvc)
+
+	// --- Material wiring (US4) ---
+	materialRepo := repositories.NewPostgresMaterialRepository(db)
+	textExtractor := repositories.NewPlainTextExtractor()
+	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor)
 
 	// --- HTTP Router setup ---
 	// BLOCKER fix: use gin.New() instead of gin.Default() to avoid trusting all proxies.
@@ -112,6 +117,10 @@ func main() {
 	{
 		courseHandler := httphandlers.NewCourseHandler(courseUseCase)
 		courseHandler.RegisterRoutes(protected)
+
+		// US4 — Material upload endpoints (nested under courses/topics).
+		materialHandler := httphandlers.NewMaterialHandler(materialUseCase)
+		materialHandler.RegisterRoutes(protected)
 	}
 
 	port := getEnv("PORT", "8080")
