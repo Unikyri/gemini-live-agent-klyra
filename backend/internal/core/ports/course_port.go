@@ -29,3 +29,11 @@ type StorageService interface {
 	// UploadFile uploads a file and returns its public or signed URL.
 	UploadFile(ctx context.Context, bucket, objectName string, data []byte, contentType string) (string, error)
 }
+
+// AvatarGenerator defines the contract for AI image generation.
+// The concrete implementation (VertexImagenService) lives in the repositories layer.
+type AvatarGenerator interface {
+	// GenerateAvatar produces a transparent-background avatar PNG
+	// based on an optional reference style hint.
+	GenerateAvatar(ctx context.Context, referenceStyle string) (imageBytes []byte, mimeType string, err error)
+}
