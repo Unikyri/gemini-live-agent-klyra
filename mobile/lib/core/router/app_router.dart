@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'package:klyra/features/auth/presentation/auth_controller.dart';
 import 'package:klyra/features/auth/presentation/login_screen.dart';
+import 'package:klyra/features/course/presentation/course_dashboard_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -30,9 +30,7 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
       GoRoute(
         path: '/home',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Dashboard Placeholder. (US6)')),
-        ),
+        builder: (context, state) => const CourseDashboardScreen(),
       ),
     ],
   );
