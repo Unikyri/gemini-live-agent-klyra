@@ -3,10 +3,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"sync"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"golang.org/x/time/rate"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -57,7 +62,35 @@ func main() {
 	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc, imageGenSvc)
 
 	// --- HTTP Router setup ---
-	router := gin.Default()
+	// BLOCKER fix: use gin.New() instead of gin.Default() to avoid trusting all proxies.
+	// SetTrustedProxies(nil) disables proxy trust entirely (safe for Cloud Run).
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("Failed to configure trusted proxies: %v", err)
+	}
+
+	// WARNING fix: security headers middleware.
+	// These headers harden the API against common browser-based attacks.
+	router.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff") // prevent MIME sniffing
+		c.Header("X-Frame-Options", "DENY")           // prevent clickjacking
+		c.Header("X-XSS-Protection", "1; mode=block") // legacy XSS filter
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	})
+
+	// WARNING fix: CORS — only allow the configured origin.
+	// In development this is localhost; in production set ALLOWED_ORIGIN in Cloud Run.
+	allowedOrigin := getEnv("ALLOWED_ORIGIN", "http://localhost:3000")
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{allowedOrigin},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// Health check endpoint — used by Cloud Run and load balancers.
 	router.GET("/health", func(c *gin.Context) {
@@ -66,9 +99,12 @@ func main() {
 
 	v1 := router.Group("/api/v1")
 
+	// WARNING fix: rate limiter for sensitive auth endpoints (5 req/sec, burst 10 per IP).
+	authRateLimiter := newIPRateLimiter(rate.Limit(5), 10)
+
 	// Public routes (no JWT required)
 	authHandler := httphandlers.NewAuthHandler(authUseCase)
-	authHandler.RegisterRoutes(v1)
+	authHandler.RegisterRoutes(v1, authRateLimiter.RateLimit())
 
 	// Protected routes — JWT middleware enforces authentication on all sub-routes.
 	protected := v1.Group("/")
@@ -82,6 +118,41 @@ func main() {
 	log.Printf("Klyra Backend starting on port %s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
+	}
+}
+
+// --- Rate Limiter (per IP) ---
+
+type ipRateLimiter struct {
+	mu       sync.Mutex
+	limiters map[string]*rate.Limiter
+	r        rate.Limit
+	b        int
+}
+
+func newIPRateLimiter(r rate.Limit, b int) *ipRateLimiter {
+	return &ipRateLimiter{limiters: make(map[string]*rate.Limiter), r: r, b: b}
+}
+
+func (i *ipRateLimiter) getLimiter(ip string) *rate.Limiter {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if l, ok := i.limiters[ip]; ok {
+		return l
+	}
+	l := rate.NewLimiter(i.r, i.b)
+	i.limiters[ip] = l
+	return l
+}
+
+// RateLimit returns a Gin middleware that limits requests per client IP.
+func (i *ipRateLimiter) RateLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !i.getLimiter(c.ClientIP()).Allow() {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
+			return
+		}
+		c.Next()
 	}
 }
 

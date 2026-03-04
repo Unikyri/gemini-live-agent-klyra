@@ -2,12 +2,17 @@ package httphandlers
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/usecases"
 )
+
+// maxImageSize limits uploaded reference images to 10 MB.
+// This prevents DoS attacks via excessively large uploads.
+const maxImageSize = 10 << 20 // 10 MB
 
 // CourseHandler handles HTTP requests for the Course Management module.
 type CourseHandler struct {
@@ -44,15 +49,31 @@ func (h *CourseHandler) CreateCourse(c *gin.Context) {
 	// Handle optional reference image upload.
 	var imageData []byte
 	var imageType string
-	file, header, err := c.Request.FormFile("reference_image")
+	file, _, err := c.Request.FormFile("reference_image")
 	if err == nil && file != nil {
 		defer file.Close()
-		imageData, err = io.ReadAll(file)
+
+		// SECURITY (BLOCKER fix): limit reads to maxImageSize to prevent DoS via huge uploads.
+		limitedReader := io.LimitReader(file, maxImageSize+1)
+		imageData, err = io.ReadAll(limitedReader)
 		if err != nil {
+			log.Printf("[Course] Failed to read uploaded image: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read uploaded file"})
 			return
 		}
-		imageType = header.Header.Get("Content-Type")
+		if int64(len(imageData)) > maxImageSize {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "image exceeds 10 MB limit"})
+			return
+		}
+
+		// SECURITY (WARNING fix): detect the real MIME type from magic bytes — never trust client headers.
+		detectedType := http.DetectContentType(imageData)
+		allowedTypes := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true, "image/gif": true}
+		if !allowedTypes[detectedType] {
+			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only JPEG, PNG, WebP and GIF images are allowed"})
+			return
+		}
+		imageType = detectedType
 	}
 
 	course, err := h.courseUseCase.CreateCourse(c.Request.Context(), usecases.CreateCourseInput{

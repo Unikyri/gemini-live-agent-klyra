@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,9 @@ func NewAuthHandler(authUseCase *usecases.AuthUseCase) *AuthHandler {
 }
 
 // RegisterRoutes attaches auth routes to the given Gin router group.
-func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.POST("/auth/google", h.GoogleSignIn)
+// Optional middlewares (e.g. rate limiters) can be passed as extra arguments.
+func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup, middlewares ...gin.HandlerFunc) {
+	rg.POST("/auth/google", append(middlewares, h.GoogleSignIn)...)
 }
 
 // googleSignInRequest is the expected JSON body from the Flutter client.
@@ -42,8 +44,9 @@ func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
 
 	result, err := h.authUseCase.GoogleSignIn(c.Request.Context(), req.IDToken)
 	if err != nil {
-		// SECURITY: We log the real error server-side but never expose it to the client.
-		// This prevents information leakage about our internal auth flow.
+		// SECURITY (WARNING fix): log the real error server-side for traceability,
+		// but never expose internal details to the client.
+		log.Printf("[Auth] GoogleSignIn failed: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication failed"})
 		return
 	}
