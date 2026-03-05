@@ -15,8 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Course {
 
- String get id;@JsonKey(name: 'user_id') String get userId; String get name;@JsonKey(name: 'education_level') String get educationLevel;@JsonKey(name: 'avatar_model_url') String? get avatarModelUrl;@JsonKey(name: 'avatar_status') String get avatarStatus;// pending, generating, ready, failed
-@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'updated_at') DateTime get updatedAt;
+ String get id;@JsonKey(name: 'user_id') String get userId; String get name;@JsonKey(name: 'education_level') String get educationLevel;@JsonKey(name: 'avatar_model_url') String? get avatarModelUrl;@JsonKey(name: 'avatar_status') String get avatarStatus;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'updated_at') DateTime get updatedAt;@JsonKey(name: 'topics') List<Topic> get topics;
 /// Create a copy of Course
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,16 +28,16 @@ $CourseCopyWith<Course> get copyWith => _$CourseCopyWithImpl<Course>(this as Cou
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Course&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.name, name) || other.name == name)&&(identical(other.educationLevel, educationLevel) || other.educationLevel == educationLevel)&&(identical(other.avatarModelUrl, avatarModelUrl) || other.avatarModelUrl == avatarModelUrl)&&(identical(other.avatarStatus, avatarStatus) || other.avatarStatus == avatarStatus)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Course&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.name, name) || other.name == name)&&(identical(other.educationLevel, educationLevel) || other.educationLevel == educationLevel)&&(identical(other.avatarModelUrl, avatarModelUrl) || other.avatarModelUrl == avatarModelUrl)&&(identical(other.avatarStatus, avatarStatus) || other.avatarStatus == avatarStatus)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.topics, topics));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,name,educationLevel,avatarModelUrl,avatarStatus,createdAt,updatedAt);
+int get hashCode => Object.hash(runtimeType,id,userId,name,educationLevel,avatarModelUrl,avatarStatus,createdAt,updatedAt,const DeepCollectionEquality().hash(topics));
 
 @override
 String toString() {
-  return 'Course(id: $id, userId: $userId, name: $name, educationLevel: $educationLevel, avatarModelUrl: $avatarModelUrl, avatarStatus: $avatarStatus, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'Course(id: $id, userId: $userId, name: $name, educationLevel: $educationLevel, avatarModelUrl: $avatarModelUrl, avatarStatus: $avatarStatus, createdAt: $createdAt, updatedAt: $updatedAt, topics: $topics)';
 }
 
 
@@ -49,7 +48,7 @@ abstract mixin class $CourseCopyWith<$Res>  {
   factory $CourseCopyWith(Course value, $Res Function(Course) _then) = _$CourseCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId, String name,@JsonKey(name: 'education_level') String educationLevel,@JsonKey(name: 'avatar_model_url') String? avatarModelUrl,@JsonKey(name: 'avatar_status') String avatarStatus,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt
+ String id,@JsonKey(name: 'user_id') String userId, String name,@JsonKey(name: 'education_level') String educationLevel,@JsonKey(name: 'avatar_model_url') String? avatarModelUrl,@JsonKey(name: 'avatar_status') String avatarStatus,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'topics') List<Topic> topics
 });
 
 
@@ -66,7 +65,7 @@ class _$CourseCopyWithImpl<$Res>
 
 /// Create a copy of Course
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? name = null,Object? educationLevel = null,Object? avatarModelUrl = freezed,Object? avatarStatus = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? name = null,Object? educationLevel = null,Object? avatarModelUrl = freezed,Object? avatarStatus = null,Object? createdAt = null,Object? updatedAt = null,Object? topics = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
@@ -76,7 +75,8 @@ as String,avatarModelUrl: freezed == avatarModelUrl ? _self.avatarModelUrl : ava
 as String?,avatarStatus: null == avatarStatus ? _self.avatarStatus : avatarStatus // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,topics: null == topics ? _self.topics : topics // ignore: cast_nullable_to_non_nullable
+as List<Topic>,
   ));
 }
 
@@ -161,10 +161,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'topics')  List<Topic> topics)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Course() when $default != null:
-return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt,_that.topics);case _:
   return orElse();
 
 }
@@ -182,10 +182,10 @@ return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avat
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'topics')  List<Topic> topics)  $default,) {final _that = this;
 switch (_that) {
 case _Course():
-return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt,_that.topics);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +202,10 @@ return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avat
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId,  String name, @JsonKey(name: 'education_level')  String educationLevel, @JsonKey(name: 'avatar_model_url')  String? avatarModelUrl, @JsonKey(name: 'avatar_status')  String avatarStatus, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'topics')  List<Topic> topics)?  $default,) {final _that = this;
 switch (_that) {
 case _Course() when $default != null:
-return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avatarModelUrl,_that.avatarStatus,_that.createdAt,_that.updatedAt,_that.topics);case _:
   return null;
 
 }
@@ -217,7 +217,7 @@ return $default(_that.id,_that.userId,_that.name,_that.educationLevel,_that.avat
 @JsonSerializable()
 
 class _Course implements Course {
-  const _Course({required this.id, @JsonKey(name: 'user_id') required this.userId, required this.name, @JsonKey(name: 'education_level') required this.educationLevel, @JsonKey(name: 'avatar_model_url') this.avatarModelUrl, @JsonKey(name: 'avatar_status') required this.avatarStatus, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'updated_at') required this.updatedAt});
+  const _Course({required this.id, @JsonKey(name: 'user_id') required this.userId, required this.name, @JsonKey(name: 'education_level') required this.educationLevel, @JsonKey(name: 'avatar_model_url') this.avatarModelUrl, @JsonKey(name: 'avatar_status') required this.avatarStatus, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'updated_at') required this.updatedAt, @JsonKey(name: 'topics') final  List<Topic> topics = const []}): _topics = topics;
   factory _Course.fromJson(Map<String, dynamic> json) => _$CourseFromJson(json);
 
 @override final  String id;
@@ -226,9 +226,15 @@ class _Course implements Course {
 @override@JsonKey(name: 'education_level') final  String educationLevel;
 @override@JsonKey(name: 'avatar_model_url') final  String? avatarModelUrl;
 @override@JsonKey(name: 'avatar_status') final  String avatarStatus;
-// pending, generating, ready, failed
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
 @override@JsonKey(name: 'updated_at') final  DateTime updatedAt;
+ final  List<Topic> _topics;
+@override@JsonKey(name: 'topics') List<Topic> get topics {
+  if (_topics is EqualUnmodifiableListView) return _topics;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_topics);
+}
+
 
 /// Create a copy of Course
 /// with the given fields replaced by the non-null parameter values.
@@ -243,16 +249,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Course&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.name, name) || other.name == name)&&(identical(other.educationLevel, educationLevel) || other.educationLevel == educationLevel)&&(identical(other.avatarModelUrl, avatarModelUrl) || other.avatarModelUrl == avatarModelUrl)&&(identical(other.avatarStatus, avatarStatus) || other.avatarStatus == avatarStatus)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Course&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.name, name) || other.name == name)&&(identical(other.educationLevel, educationLevel) || other.educationLevel == educationLevel)&&(identical(other.avatarModelUrl, avatarModelUrl) || other.avatarModelUrl == avatarModelUrl)&&(identical(other.avatarStatus, avatarStatus) || other.avatarStatus == avatarStatus)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other._topics, _topics));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,name,educationLevel,avatarModelUrl,avatarStatus,createdAt,updatedAt);
+int get hashCode => Object.hash(runtimeType,id,userId,name,educationLevel,avatarModelUrl,avatarStatus,createdAt,updatedAt,const DeepCollectionEquality().hash(_topics));
 
 @override
 String toString() {
-  return 'Course(id: $id, userId: $userId, name: $name, educationLevel: $educationLevel, avatarModelUrl: $avatarModelUrl, avatarStatus: $avatarStatus, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'Course(id: $id, userId: $userId, name: $name, educationLevel: $educationLevel, avatarModelUrl: $avatarModelUrl, avatarStatus: $avatarStatus, createdAt: $createdAt, updatedAt: $updatedAt, topics: $topics)';
 }
 
 
@@ -263,7 +269,7 @@ abstract mixin class _$CourseCopyWith<$Res> implements $CourseCopyWith<$Res> {
   factory _$CourseCopyWith(_Course value, $Res Function(_Course) _then) = __$CourseCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId, String name,@JsonKey(name: 'education_level') String educationLevel,@JsonKey(name: 'avatar_model_url') String? avatarModelUrl,@JsonKey(name: 'avatar_status') String avatarStatus,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt
+ String id,@JsonKey(name: 'user_id') String userId, String name,@JsonKey(name: 'education_level') String educationLevel,@JsonKey(name: 'avatar_model_url') String? avatarModelUrl,@JsonKey(name: 'avatar_status') String avatarStatus,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'topics') List<Topic> topics
 });
 
 
@@ -280,7 +286,7 @@ class __$CourseCopyWithImpl<$Res>
 
 /// Create a copy of Course
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? name = null,Object? educationLevel = null,Object? avatarModelUrl = freezed,Object? avatarStatus = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? name = null,Object? educationLevel = null,Object? avatarModelUrl = freezed,Object? avatarStatus = null,Object? createdAt = null,Object? updatedAt = null,Object? topics = null,}) {
   return _then(_Course(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
@@ -290,7 +296,8 @@ as String,avatarModelUrl: freezed == avatarModelUrl ? _self.avatarModelUrl : ava
 as String?,avatarStatus: null == avatarStatus ? _self.avatarStatus : avatarStatus // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,topics: null == topics ? _self._topics : topics // ignore: cast_nullable_to_non_nullable
+as List<Topic>,
   ));
 }
 
@@ -557,6 +564,553 @@ class __$CreateCourseRequestCopyWithImpl<$Res>
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,educationLevel: null == educationLevel ? _self.educationLevel : educationLevel // ignore: cast_nullable_to_non_nullable
 as String,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$Topic {
+
+ String get id;@JsonKey(name: 'course_id') String get courseId; String get title;@JsonKey(name: 'order_index') int get orderIndex;@JsonKey(name: 'consolidated_context') String? get consolidatedContext;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'updated_at') DateTime get updatedAt;
+/// Create a copy of Topic
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TopicCopyWith<Topic> get copyWith => _$TopicCopyWithImpl<Topic>(this as Topic, _$identity);
+
+  /// Serializes this Topic to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Topic&&(identical(other.id, id) || other.id == id)&&(identical(other.courseId, courseId) || other.courseId == courseId)&&(identical(other.title, title) || other.title == title)&&(identical(other.orderIndex, orderIndex) || other.orderIndex == orderIndex)&&(identical(other.consolidatedContext, consolidatedContext) || other.consolidatedContext == consolidatedContext)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,courseId,title,orderIndex,consolidatedContext,createdAt,updatedAt);
+
+@override
+String toString() {
+  return 'Topic(id: $id, courseId: $courseId, title: $title, orderIndex: $orderIndex, consolidatedContext: $consolidatedContext, createdAt: $createdAt, updatedAt: $updatedAt)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TopicCopyWith<$Res>  {
+  factory $TopicCopyWith(Topic value, $Res Function(Topic) _then) = _$TopicCopyWithImpl;
+@useResult
+$Res call({
+ String id,@JsonKey(name: 'course_id') String courseId, String title,@JsonKey(name: 'order_index') int orderIndex,@JsonKey(name: 'consolidated_context') String? consolidatedContext,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt
+});
+
+
+
+
+}
+/// @nodoc
+class _$TopicCopyWithImpl<$Res>
+    implements $TopicCopyWith<$Res> {
+  _$TopicCopyWithImpl(this._self, this._then);
+
+  final Topic _self;
+  final $Res Function(Topic) _then;
+
+/// Create a copy of Topic
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? courseId = null,Object? title = null,Object? orderIndex = null,Object? consolidatedContext = freezed,Object? createdAt = null,Object? updatedAt = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,courseId: null == courseId ? _self.courseId : courseId // ignore: cast_nullable_to_non_nullable
+as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String,orderIndex: null == orderIndex ? _self.orderIndex : orderIndex // ignore: cast_nullable_to_non_nullable
+as int,consolidatedContext: freezed == consolidatedContext ? _self.consolidatedContext : consolidatedContext // ignore: cast_nullable_to_non_nullable
+as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [Topic].
+extension TopicPatterns on Topic {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _Topic value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _Topic() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _Topic value)  $default,){
+final _that = this;
+switch (_that) {
+case _Topic():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _Topic value)?  $default,){
+final _that = this;
+switch (_that) {
+case _Topic() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'course_id')  String courseId,  String title, @JsonKey(name: 'order_index')  int orderIndex, @JsonKey(name: 'consolidated_context')  String? consolidatedContext, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _Topic() when $default != null:
+return $default(_that.id,_that.courseId,_that.title,_that.orderIndex,_that.consolidatedContext,_that.createdAt,_that.updatedAt);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'course_id')  String courseId,  String title, @JsonKey(name: 'order_index')  int orderIndex, @JsonKey(name: 'consolidated_context')  String? consolidatedContext, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)  $default,) {final _that = this;
+switch (_that) {
+case _Topic():
+return $default(_that.id,_that.courseId,_that.title,_that.orderIndex,_that.consolidatedContext,_that.createdAt,_that.updatedAt);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'course_id')  String courseId,  String title, @JsonKey(name: 'order_index')  int orderIndex, @JsonKey(name: 'consolidated_context')  String? consolidatedContext, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt)?  $default,) {final _that = this;
+switch (_that) {
+case _Topic() when $default != null:
+return $default(_that.id,_that.courseId,_that.title,_that.orderIndex,_that.consolidatedContext,_that.createdAt,_that.updatedAt);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _Topic implements Topic {
+  const _Topic({required this.id, @JsonKey(name: 'course_id') required this.courseId, required this.title, @JsonKey(name: 'order_index') this.orderIndex = 0, @JsonKey(name: 'consolidated_context') this.consolidatedContext, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'updated_at') required this.updatedAt});
+  factory _Topic.fromJson(Map<String, dynamic> json) => _$TopicFromJson(json);
+
+@override final  String id;
+@override@JsonKey(name: 'course_id') final  String courseId;
+@override final  String title;
+@override@JsonKey(name: 'order_index') final  int orderIndex;
+@override@JsonKey(name: 'consolidated_context') final  String? consolidatedContext;
+@override@JsonKey(name: 'created_at') final  DateTime createdAt;
+@override@JsonKey(name: 'updated_at') final  DateTime updatedAt;
+
+/// Create a copy of Topic
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$TopicCopyWith<_Topic> get copyWith => __$TopicCopyWithImpl<_Topic>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$TopicToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Topic&&(identical(other.id, id) || other.id == id)&&(identical(other.courseId, courseId) || other.courseId == courseId)&&(identical(other.title, title) || other.title == title)&&(identical(other.orderIndex, orderIndex) || other.orderIndex == orderIndex)&&(identical(other.consolidatedContext, consolidatedContext) || other.consolidatedContext == consolidatedContext)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,courseId,title,orderIndex,consolidatedContext,createdAt,updatedAt);
+
+@override
+String toString() {
+  return 'Topic(id: $id, courseId: $courseId, title: $title, orderIndex: $orderIndex, consolidatedContext: $consolidatedContext, createdAt: $createdAt, updatedAt: $updatedAt)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$TopicCopyWith<$Res> implements $TopicCopyWith<$Res> {
+  factory _$TopicCopyWith(_Topic value, $Res Function(_Topic) _then) = __$TopicCopyWithImpl;
+@override @useResult
+$Res call({
+ String id,@JsonKey(name: 'course_id') String courseId, String title,@JsonKey(name: 'order_index') int orderIndex,@JsonKey(name: 'consolidated_context') String? consolidatedContext,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt
+});
+
+
+
+
+}
+/// @nodoc
+class __$TopicCopyWithImpl<$Res>
+    implements _$TopicCopyWith<$Res> {
+  __$TopicCopyWithImpl(this._self, this._then);
+
+  final _Topic _self;
+  final $Res Function(_Topic) _then;
+
+/// Create a copy of Topic
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? courseId = null,Object? title = null,Object? orderIndex = null,Object? consolidatedContext = freezed,Object? createdAt = null,Object? updatedAt = null,}) {
+  return _then(_Topic(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,courseId: null == courseId ? _self.courseId : courseId // ignore: cast_nullable_to_non_nullable
+as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String,orderIndex: null == orderIndex ? _self.orderIndex : orderIndex // ignore: cast_nullable_to_non_nullable
+as int,consolidatedContext: freezed == consolidatedContext ? _self.consolidatedContext : consolidatedContext // ignore: cast_nullable_to_non_nullable
+as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$CreateTopicRequest {
+
+ String get title;@JsonKey(name: 'order_index') int get orderIndex;
+/// Create a copy of CreateTopicRequest
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$CreateTopicRequestCopyWith<CreateTopicRequest> get copyWith => _$CreateTopicRequestCopyWithImpl<CreateTopicRequest>(this as CreateTopicRequest, _$identity);
+
+  /// Serializes this CreateTopicRequest to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CreateTopicRequest&&(identical(other.title, title) || other.title == title)&&(identical(other.orderIndex, orderIndex) || other.orderIndex == orderIndex));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,title,orderIndex);
+
+@override
+String toString() {
+  return 'CreateTopicRequest(title: $title, orderIndex: $orderIndex)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $CreateTopicRequestCopyWith<$Res>  {
+  factory $CreateTopicRequestCopyWith(CreateTopicRequest value, $Res Function(CreateTopicRequest) _then) = _$CreateTopicRequestCopyWithImpl;
+@useResult
+$Res call({
+ String title,@JsonKey(name: 'order_index') int orderIndex
+});
+
+
+
+
+}
+/// @nodoc
+class _$CreateTopicRequestCopyWithImpl<$Res>
+    implements $CreateTopicRequestCopyWith<$Res> {
+  _$CreateTopicRequestCopyWithImpl(this._self, this._then);
+
+  final CreateTopicRequest _self;
+  final $Res Function(CreateTopicRequest) _then;
+
+/// Create a copy of CreateTopicRequest
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? title = null,Object? orderIndex = null,}) {
+  return _then(_self.copyWith(
+title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String,orderIndex: null == orderIndex ? _self.orderIndex : orderIndex // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [CreateTopicRequest].
+extension CreateTopicRequestPatterns on CreateTopicRequest {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _CreateTopicRequest value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _CreateTopicRequest() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _CreateTopicRequest value)  $default,){
+final _that = this;
+switch (_that) {
+case _CreateTopicRequest():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _CreateTopicRequest value)?  $default,){
+final _that = this;
+switch (_that) {
+case _CreateTopicRequest() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String title, @JsonKey(name: 'order_index')  int orderIndex)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _CreateTopicRequest() when $default != null:
+return $default(_that.title,_that.orderIndex);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String title, @JsonKey(name: 'order_index')  int orderIndex)  $default,) {final _that = this;
+switch (_that) {
+case _CreateTopicRequest():
+return $default(_that.title,_that.orderIndex);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String title, @JsonKey(name: 'order_index')  int orderIndex)?  $default,) {final _that = this;
+switch (_that) {
+case _CreateTopicRequest() when $default != null:
+return $default(_that.title,_that.orderIndex);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _CreateTopicRequest implements CreateTopicRequest {
+  const _CreateTopicRequest({required this.title, @JsonKey(name: 'order_index') this.orderIndex = 0});
+  factory _CreateTopicRequest.fromJson(Map<String, dynamic> json) => _$CreateTopicRequestFromJson(json);
+
+@override final  String title;
+@override@JsonKey(name: 'order_index') final  int orderIndex;
+
+/// Create a copy of CreateTopicRequest
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$CreateTopicRequestCopyWith<_CreateTopicRequest> get copyWith => __$CreateTopicRequestCopyWithImpl<_CreateTopicRequest>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$CreateTopicRequestToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CreateTopicRequest&&(identical(other.title, title) || other.title == title)&&(identical(other.orderIndex, orderIndex) || other.orderIndex == orderIndex));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,title,orderIndex);
+
+@override
+String toString() {
+  return 'CreateTopicRequest(title: $title, orderIndex: $orderIndex)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$CreateTopicRequestCopyWith<$Res> implements $CreateTopicRequestCopyWith<$Res> {
+  factory _$CreateTopicRequestCopyWith(_CreateTopicRequest value, $Res Function(_CreateTopicRequest) _then) = __$CreateTopicRequestCopyWithImpl;
+@override @useResult
+$Res call({
+ String title,@JsonKey(name: 'order_index') int orderIndex
+});
+
+
+
+
+}
+/// @nodoc
+class __$CreateTopicRequestCopyWithImpl<$Res>
+    implements _$CreateTopicRequestCopyWith<$Res> {
+  __$CreateTopicRequestCopyWithImpl(this._self, this._then);
+
+  final _CreateTopicRequest _self;
+  final $Res Function(_CreateTopicRequest) _then;
+
+/// Create a copy of CreateTopicRequest
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? title = null,Object? orderIndex = null,}) {
+  return _then(_CreateTopicRequest(
+title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String,orderIndex: null == orderIndex ? _self.orderIndex : orderIndex // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

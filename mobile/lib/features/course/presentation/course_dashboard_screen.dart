@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:klyra/features/course/presentation/course_controller.dart';
 import 'package:klyra/features/course/domain/course_models.dart';
 import 'package:klyra/features/course/presentation/create_course_modal.dart';
@@ -134,9 +135,7 @@ class _CourseCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            // TODO: Navigate to Course Detail (US7)
-          },
+          onTap: () => context.push('/course/${course.id}'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

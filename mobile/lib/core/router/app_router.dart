@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:klyra/features/auth/presentation/auth_controller.dart';
 import 'package:klyra/features/auth/presentation/login_screen.dart';
 import 'package:klyra/features/course/presentation/course_dashboard_screen.dart';
+import 'package:klyra/features/course/presentation/course_detail_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -14,13 +15,12 @@ GoRouter appRouter(AppRouterRef ref) {
   return GoRouter(
     initialLocation: '/login',
     redirect: (context, state) {
-      // If the user isn't authenticated, redirect to login
       final isAuth = authState.value != null;
       final isLoggingIn = state.uri.path == '/login';
-      
+
       if (!isAuth && !isLoggingIn) return '/login';
       if (isAuth && isLoggingIn) return '/home';
-      
+
       return null;
     },
     routes: [
@@ -31,6 +31,13 @@ GoRouter appRouter(AppRouterRef ref) {
       GoRoute(
         path: '/home',
         builder: (context, state) => const CourseDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/course/:courseId',
+        builder: (context, state) {
+          final courseId = state.pathParameters['courseId']!;
+          return CourseDetailScreen(courseId: courseId);
+        },
       ),
     ],
   );
