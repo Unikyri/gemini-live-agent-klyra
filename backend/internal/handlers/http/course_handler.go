@@ -29,8 +29,8 @@ func NewCourseHandler(courseUseCase *usecases.CourseUseCase) *CourseHandler {
 func (h *CourseHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/courses", h.CreateCourse)
 	rg.GET("/courses", h.ListCourses)
-	rg.GET("/courses/:id", h.GetCourse)
-	rg.POST("/courses/:id/topics", h.AddTopic)
+	rg.GET("/courses/:course_id", h.GetCourse)
+	rg.POST("/courses/:course_id/topics", h.AddTopic)
 }
 
 // CreateCourse handles POST /api/v1/courses
@@ -105,11 +105,11 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"courses": courses, "total": len(courses)})
 }
 
-// GetCourse handles GET /api/v1/courses/:id
+// GetCourse handles GET /api/v1/courses/:course_id
 // Returns a single course with its topics. Validates ownership before returning.
 func (h *CourseHandler) GetCourse(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	courseID := c.Param("id")
+	courseID := c.Param("course_id")
 
 	course, err := h.courseUseCase.GetCourseByID(c.Request.Context(), courseID, userID.(string))
 	if err != nil {
@@ -126,11 +126,11 @@ func (h *CourseHandler) GetCourse(c *gin.Context) {
 	c.JSON(http.StatusOK, course)
 }
 
-// AddTopic handles POST /api/v1/courses/:id/topics
+// AddTopic handles POST /api/v1/courses/:course_id/topics
 // Body: { "title": "Integral Calculus" }
 func (h *CourseHandler) AddTopic(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	courseID := c.Param("id")
+	courseID := c.Param("course_id")
 
 	var body struct {
 		Title string `json:"title" binding:"required"`
