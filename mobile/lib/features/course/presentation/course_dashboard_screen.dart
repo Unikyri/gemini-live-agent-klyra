@@ -47,10 +47,10 @@ class CourseDashboardScreen extends ConsumerWidget {
               const Icon(Icons.error_outline, size: 64, color: Colors.redAccent),
               const SizedBox(height: 16),
               Text('Failed to load courses', style: theme.textTheme.titleLarge),
-              Text(err.toString(), style: theme.textTheme.bodyMedium),
+              // Do not expose internal error details to the user (security: info disclosure)
+              Text('Something went wrong. Please try again.', style: theme.textTheme.bodyMedium),
               const SizedBox(height: 24),
               ElevatedButton(
-                onShowHoverHighlight: null,
                 onPressed: () => ref.refresh(courseControllerProvider),
                 child: const Text('Retry'),
               )

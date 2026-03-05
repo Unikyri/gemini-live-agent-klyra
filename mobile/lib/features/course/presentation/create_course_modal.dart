@@ -35,10 +35,18 @@ class _CreateCourseModalState extends ConsumerState<CreateCourseModal> {
     await ref.read(courseControllerProvider.notifier).createCourse(_name, _educationLevel);
     
     if (mounted) {
-      // Close the modal upon successful submission. 
-      // Errors are typically caught globally or shown via snackbars, 
-      // but for Sprint 2 MVP we assume success if no throw occurred synchronously.
-      context.pop();
+      // Only close the modal if the state is NOT in error (i.e., creation succeeded)
+      final state = ref.read(courseControllerProvider);
+      if (!state.hasError) {
+        context.pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to create course. Please try again.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 

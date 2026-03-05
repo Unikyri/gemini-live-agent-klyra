@@ -9,16 +9,18 @@ part 'auth_controller.g.dart';
 class AuthController extends _$AuthController {
   @override
   FutureOr<User?> build() async {
-    // Check if user is already logged in on app start
+    // Attempt to restore the session from secure storage on app start.
+    // For Sprint 2, we only check if a token exists.
+    // Sprint 3 TODO: call GET /me to restore full User object and validate against server.
     final repo = ref.watch(authRepositoryProvider);
     final isLoggedIn = await repo.isLoggedIn();
     if (isLoggedIn) {
-      // For MVP, we don't have a /me endpoint yet, so we just return a dummy user 
-      // or we'd ideally fetch the profile. Let's return null to force login for now
-      // unless we actually persist the user object too.
-      // Better strategy: persist User object or fetch /me.
+      // Return a sentinel User to signal that the session is valid.
+      // This is enough to redirect to the dashboard via GoRouter guard.
+      // The full User profile will be loaded by the Dashboard screen.
+      return const User(id: 'cached', email: '', name: 'Cached Session');
     }
-    return null; 
+    return null;
   }
 
   Future<void> signInWithGoogle() async {
