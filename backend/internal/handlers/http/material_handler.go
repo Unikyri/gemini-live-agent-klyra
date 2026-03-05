@@ -52,7 +52,12 @@ func (h *MaterialHandler) RegisterRoutes(rg *gin.RouterGroup) {
 // Accepts multipart/form-data with a single "file" field.
 func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 	// SECURITY: user_id comes from the JWT middleware context — never from the request body.
-	userID, _ := c.Get("user_id")
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
 	courseID := c.Param("course_id")
 	topicID := c.Param("topic_id")
 
@@ -92,7 +97,7 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 	}
 
 	material, err := h.materialUseCase.UploadMaterial(c.Request.Context(), usecases.UploadMaterialInput{
-		UserID:     userID.(string),
+		UserID:     userID,
 		CourseID:   courseID,
 		TopicID:    topicID,
 		FileName:   header.Filename,
@@ -116,11 +121,16 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 
 // ListMaterials handles GET /api/v1/courses/:course_id/topics/:topic_id/materials
 func (h *MaterialHandler) ListMaterials(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
 	courseID := c.Param("course_id")
 	topicID := c.Param("topic_id")
 
-	materials, err := h.materialUseCase.GetMaterialsByTopic(c.Request.Context(), courseID, topicID, userID.(string))
+	materials, err := h.materialUseCase.GetMaterialsByTopic(c.Request.Context(), courseID, topicID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve materials"})
 		return
