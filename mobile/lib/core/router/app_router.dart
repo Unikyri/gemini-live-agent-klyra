@@ -5,6 +5,7 @@ import 'package:klyra/features/auth/presentation/auth_controller.dart';
 import 'package:klyra/features/auth/presentation/login_screen.dart';
 import 'package:klyra/features/course/presentation/course_dashboard_screen.dart';
 import 'package:klyra/features/course/presentation/course_detail_screen.dart';
+import 'package:klyra/features/tutor/presentation/tutor_session_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -37,6 +38,14 @@ GoRouter appRouter(AppRouterRef ref) {
         builder: (context, state) {
           final courseId = state.pathParameters['courseId']!;
           return CourseDetailScreen(courseId: courseId);
+        },
+      ),
+      GoRoute(
+        path: '/tutor/:courseId/:topicId',
+        builder: (context, state) {
+          final courseId = state.pathParameters['courseId']!;
+          final topicId = state.pathParameters['topicId']!;
+          return TutorSessionScreen(courseId: courseId, topicId: topicId);
         },
       ),
     ],

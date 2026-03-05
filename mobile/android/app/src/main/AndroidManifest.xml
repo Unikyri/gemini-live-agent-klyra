@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- US9: Microphone access for Gemini Live audio streaming -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Internet access for WebSocket connection to Gemini Live API -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="klyra"
         android:name="${applicationName}"

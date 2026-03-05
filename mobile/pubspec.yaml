@@ -42,6 +42,10 @@ dependencies:
   file_picker:
   cached_network_image:
   http:
+  web_socket_channel:
+  record:
+  permission_handler:
+  audioplayers:
 
 dev_dependencies:
   flutter_test:
