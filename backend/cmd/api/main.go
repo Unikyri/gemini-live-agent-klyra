@@ -75,12 +75,16 @@ func main() {
 	// --- RAG wiring (US8) ---
 	// SECURITY: EMBEDDING_CREDENTIALS_FILE should be the same service account used
 	// for Imagen/GCS (GOOGLE_APPLICATION_CREDENTIALS). Separate if least-privilege needed.
-	embeddingSvc := repositories.NewVertexEmbeddingService(
+	embeddingSvc, err := repositories.NewVertexEmbeddingService(
 		mustEnv("GCP_PROJECT_ID"),
 		getEnv("EMBEDDING_LOCATION", "us-central1"),
 		getEnv("EMBEDDING_MODEL_ID", "text-embedding-004"),
 		mustEnv("GOOGLE_APPLICATION_CREDENTIALS"),
 	)
+	if err != nil {
+		log.Fatalf("Failed to initialise Vertex AI Embedding service: %v", err)
+	}
+	defer embeddingSvc.Close() // graceful shutdown of gRPC client
 	chunkRepo := repositories.NewPostgresChunkRepository(db)
 	ragUseCase := usecases.NewRAGUseCase(materialRepo, chunkRepo, embeddingSvc)
 
