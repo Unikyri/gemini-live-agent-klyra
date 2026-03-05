@@ -15,7 +15,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/usecases"
 	httphandlers "github.com/Unikyri/gemini-live-agent-klyra/backend/internal/handlers/http"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/repositories"
@@ -24,7 +23,8 @@ import (
 func main() {
 	// Load environment variables from .env file in local development.
 	// In production (Cloud Run), these are set via Secret Manager or env config.
-	if err := godotenv.Load(); err != nil {
+	// Overload environment variables to prioritize .env over system variables
+	if err := godotenv.Overload(); err != nil {
 		log.Println("No .env file found, reading environment variables from system")
 	}
 
@@ -36,7 +36,7 @@ func main() {
 	log.Println("Database connection established successfully.")
 
 	// Auto-migrate domain models. For production, use SQL files in /migrations.
-	if err := db.AutoMigrate(
+	/*if err := db.AutoMigrate(
 		&domain.User{},
 		&domain.Course{},
 		&domain.Topic{},
@@ -44,7 +44,7 @@ func main() {
 		&domain.MaterialChunk{}, // US8: pgvector RAG store
 	); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
-	}
+	}*/
 
 	// --- Dependency Injection (Composition Root) ---
 	// Only this file knows about concrete implementations.
