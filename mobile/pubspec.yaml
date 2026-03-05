@@ -39,6 +39,9 @@ dependencies:
   go_router:
   freezed_annotation:
   json_annotation:
+  file_picker:
+  cached_network_image:
+  http:
 
 dev_dependencies:
   flutter_test:
