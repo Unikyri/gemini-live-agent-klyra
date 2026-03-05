@@ -36,7 +36,13 @@ func main() {
 	log.Println("Database connection established successfully.")
 
 	// Auto-migrate domain models. For production, use SQL files in /migrations.
-	if err := db.AutoMigrate(&domain.User{}, &domain.Course{}, &domain.Topic{}, &domain.Material{}); err != nil {
+	if err := db.AutoMigrate(
+		&domain.User{},
+		&domain.Course{},
+		&domain.Topic{},
+		&domain.Material{},
+		&domain.MaterialChunk{}, // US8: pgvector RAG store
+	); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
@@ -65,6 +71,18 @@ func main() {
 	materialRepo := repositories.NewPostgresMaterialRepository(db)
 	textExtractor := repositories.NewPlainTextExtractor()
 	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor)
+
+	// --- RAG wiring (US8) ---
+	// SECURITY: EMBEDDING_CREDENTIALS_FILE should be the same service account used
+	// for Imagen/GCS (GOOGLE_APPLICATION_CREDENTIALS). Separate if least-privilege needed.
+	embeddingSvc := repositories.NewVertexEmbeddingService(
+		mustEnv("GCP_PROJECT_ID"),
+		getEnv("EMBEDDING_LOCATION", "us-central1"),
+		getEnv("EMBEDDING_MODEL_ID", "text-embedding-004"),
+		mustEnv("GOOGLE_APPLICATION_CREDENTIALS"),
+	)
+	chunkRepo := repositories.NewPostgresChunkRepository(db)
+	ragUseCase := usecases.NewRAGUseCase(materialRepo, chunkRepo, embeddingSvc)
 
 	// --- HTTP Router setup ---
 	// BLOCKER fix: use gin.New() instead of gin.Default() to avoid trusting all proxies.
@@ -121,6 +139,10 @@ func main() {
 		// US4 — Material upload endpoints (nested under courses/topics).
 		materialHandler := httphandlers.NewMaterialHandler(materialUseCase)
 		materialHandler.RegisterRoutes(protected)
+
+		// US8 — RAG context retrieval endpoint.
+		ragHandler := httphandlers.NewRAGHandler(ragUseCase)
+		ragHandler.RegisterRoutes(protected)
 	}
 
 	port := getEnv("PORT", "8080")
