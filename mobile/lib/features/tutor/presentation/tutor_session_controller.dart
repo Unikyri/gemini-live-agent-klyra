@@ -58,6 +58,7 @@ class TutorSessionController extends _$TutorSessionController {
   StreamSubscription<SessionState>? _stateSub;
   StreamSubscription<Uint8List>? _audioSub;
   StreamSubscription<String>? _transcriptSub;
+  StreamSubscription<List<int>>? _audioMicSub; // mic stream subscription
 
   @override
   TutorSessionState build() {
@@ -70,6 +71,14 @@ class TutorSessionController extends _$TutorSessionController {
 
   /// Start a tutoring session for a given course topic.
   Future<void> startSession(String courseId, String topicId) async {
+    // Guard: API key must be injected via --dart-define at build time
+    if (_geminiApiKey.isEmpty) {
+      state = state.copyWith(
+        sessionState: SessionState.error,
+        error: 'Gemini API key not configured. Run with --dart-define=GEMINI_API_KEY=...',
+      );
+      return;
+    }
     state = state.copyWith(sessionState: SessionState.connecting, error: null);
 
     try {
@@ -152,7 +161,8 @@ class TutorSessionController extends _$TutorSessionController {
     final audioStream = await _recorder.startStream(config);
     state = state.copyWith(isMicrophoneActive: true);
 
-    audioStream.listen((audioChunk) {
+    // Store subscription so it can be cancelled on stopSession()
+    _audioMicSub = audioStream.listen((audioChunk) {
       _geminiService.sendAudioChunk(Uint8List.fromList(audioChunk));
     });
   }
@@ -166,8 +176,10 @@ class TutorSessionController extends _$TutorSessionController {
     await _stateSub?.cancel();
     await _audioSub?.cancel();
     await _transcriptSub?.cancel();
+    await _audioMicSub?.cancel(); // prevent mic stream leak
     await _recorder.dispose();
     await _player.dispose();
+    await _geminiService.disconnect(); // await async disconnect
     _geminiService.dispose();
   }
 }
