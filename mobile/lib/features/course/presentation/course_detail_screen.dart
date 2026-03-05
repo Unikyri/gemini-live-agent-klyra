@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:klyra/features/course/domain/course_models.dart';
 import 'package:klyra/features/course/presentation/course_controller.dart';
 import 'package:klyra/features/course/presentation/material_list_view.dart';
@@ -241,8 +242,9 @@ class _TopicSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
-      color: Theme.of(context).colorScheme.surface,
+      color: theme.colorScheme.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -250,10 +252,31 @@ class _TopicSection extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: MaterialListView(
-          courseId: courseId,
-          topicId: topic.id,
-          topicTitle: topic.title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            MaterialListView(
+              courseId: courseId,
+              topicId: topic.id,
+              topicTitle: topic.title,
+            ),
+            const SizedBox(height: 16),
+            // Start Tutor Session button — navigates to TutorSessionScreen
+            OutlinedButton.icon(
+              onPressed: () => context.push('/tutor/$courseId/${topic.id}'),
+              icon: const Icon(Icons.play_arrow_rounded, size: 20),
+              label: const Text('Start Tutor Session'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+                side: BorderSide(
+                  color: theme.colorScheme.primary.withOpacity(0.6),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
