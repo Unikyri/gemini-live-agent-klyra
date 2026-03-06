@@ -12,7 +12,7 @@ AuthRemoteDataSource authRemoteDataSource(Ref ref) {
   final dio = ref.watch(dioClientProvider);
   // For Android, google_sign_in expects the Web OAuth client as serverClientId
   // to issue an ID token with the correct audience (`aud`).
-  const webServerClientId = '782011204480-ri7aibqr5f922bqa0se6dpbtc5e5jvj8.apps.googleusercontent.com';
+  const webServerClientId = '782011204480-0eejl4shc1f9n360mln5secbeng6k5gb.apps.googleusercontent.com';
   final googleSignIn = GoogleSignIn(
     serverClientId: webServerClientId,
     scopes: ['email', 'profile'],
