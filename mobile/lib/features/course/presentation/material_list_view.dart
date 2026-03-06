@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:klyra/features/course/domain/material_models.dart';
+import 'package:klyra/features/course/domain/material_models.dart' as domain;
 import 'package:klyra/features/course/presentation/material_controller.dart';
 
 /// Displays all materials for a given topic and allows uploading new ones.
@@ -117,7 +117,7 @@ class MaterialListView extends ConsumerWidget {
 }
 
 class _MaterialTile extends StatelessWidget {
-  final Material material;
+  final domain.Material material;
   const _MaterialTile({required this.material});
 
   @override
@@ -139,10 +139,10 @@ class _MaterialTile extends StatelessWidget {
     }
 
     final IconData fileIcon = switch (material.formatType) {
-      MaterialFormatType.pdf => Icons.picture_as_pdf_rounded,
-      MaterialFormatType.txt => Icons.article_rounded,
-      MaterialFormatType.md => Icons.code_rounded,
-      MaterialFormatType.audio => Icons.headphones_rounded,
+      domain.MaterialFormatType.pdf => Icons.picture_as_pdf_rounded,
+      domain.MaterialFormatType.txt => Icons.article_rounded,
+      domain.MaterialFormatType.md => Icons.code_rounded,
+      domain.MaterialFormatType.audio => Icons.headphones_rounded,
     };
 
     return ListTile(

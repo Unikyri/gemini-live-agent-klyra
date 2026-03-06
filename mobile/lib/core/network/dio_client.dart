@@ -6,7 +6,7 @@ import 'package:klyra/core/storage/secure_storage.dart';
 part 'dio_client.g.dart';
 
 @Riverpod(keepAlive: true)
-Dio dioClient(DioClientRef ref) {
+Dio dioClient(Ref ref) {
   final dio = Dio(BaseOptions(
     baseUrl: EnvInfo.backendBaseUrl,
     connectTimeout: const Duration(seconds: 15),

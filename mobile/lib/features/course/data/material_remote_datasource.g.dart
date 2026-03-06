@@ -55,4 +55,4 @@ final class MaterialRemoteDataSourceProvider
 }
 
 String _$materialRemoteDataSourceHash() =>
-    r'830c0522e352db0e3234c4cdd82c29ecf3f22e3c';
+    r'c64b6152d91ace2df23625ce0c2922f0edb875f1';

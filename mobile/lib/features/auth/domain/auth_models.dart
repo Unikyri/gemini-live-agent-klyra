@@ -4,7 +4,7 @@ part 'auth_models.freezed.dart';
 part 'auth_models.g.dart';
 
 @freezed
-class User with _$User {
+abstract class User with _$User {
   const factory User({
     required String id,
     required String email,
@@ -16,7 +16,7 @@ class User with _$User {
 }
 
 @freezed
-class AuthResult with _$AuthResult {
+abstract class AuthResult with _$AuthResult {
   const factory AuthResult({
     @JsonKey(name: 'access_token') required String accessToken,
     @JsonKey(name: 'refresh_token') required String refreshToken,

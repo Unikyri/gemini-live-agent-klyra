@@ -6,7 +6,7 @@ import 'package:klyra/features/course/domain/course_models.dart';
 part 'course_remote_datasource.g.dart';
 
 @riverpod
-CourseRemoteDataSource courseRemoteDataSource(CourseRemoteDataSourceRef ref) {
+CourseRemoteDataSource courseRemoteDataSource(Ref ref) {
   final dio = ref.watch(dioClientProvider);
   return CourseRemoteDataSource(dio);
 }

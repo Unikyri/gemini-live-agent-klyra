@@ -5,7 +5,7 @@ import 'package:klyra/features/course/domain/course_models.dart';
 part 'course_repository.g.dart';
 
 @riverpod
-CourseRepository courseRepository(CourseRepositoryRef ref) {
+CourseRepository courseRepository(Ref ref) {
   final remote = ref.watch(courseRemoteDataSourceProvider);
   return CourseRepository(remote);
 }

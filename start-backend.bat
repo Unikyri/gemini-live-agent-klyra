@@ -33,7 +33,7 @@ timeout /t 3 /nobreak >nul
 
 REM Verificar estado
 echo [4/4] Verificando conexion...
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest http://localhost:8080/health -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host 'A! ^[32mBACKEND ONLINE^[0m - Status: '$r.StatusCode } catch { Write-Host 'Started... check http://localhost:8080/health in 5 seconds' }"
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest http://localhost:8080/health -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host '? BACKEND ONLINE - Status: '.StatusCode } catch { Write-Host '? Backend iniciando... intenta en 5 segundos' }"
 
 echo.
 echo ========================================

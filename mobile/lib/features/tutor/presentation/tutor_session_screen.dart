@@ -56,7 +56,7 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
     final coursesAsync = ref.watch(courseControllerProvider);
     final theme = Theme.of(context);
 
-    final Course? course = coursesAsync.valueOrNull
+    final Course? course = coursesAsync.whenOrNull(data: (d) => d)
         ?.where((c) => c.id == widget.courseId)
         .firstOrNull;
     final Topic? topic = course?.topics

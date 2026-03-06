@@ -8,7 +8,7 @@ import 'package:klyra/features/auth/domain/auth_models.dart';
 part 'auth_repository.g.dart';
 
 @riverpod
-AuthRepository authRepository(AuthRepositoryRef ref) {
+AuthRepository authRepository(Ref ref) {
   final remoteDataSource = ref.watch(authRemoteDataSourceProvider);
   final secureStorage = ref.watch(secureStorageProvider);
   return AuthRepository(remoteDataSource, secureStorage);

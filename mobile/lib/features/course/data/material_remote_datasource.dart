@@ -8,7 +8,7 @@ part 'material_remote_datasource.g.dart';
 
 @riverpod
 MaterialRemoteDataSource materialRemoteDataSource(
-    MaterialRemoteDataSourceRef ref) {
+    Ref ref) {
   final dio = ref.watch(dioClientProvider);
   return MaterialRemoteDataSource(dio);
 }

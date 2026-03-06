@@ -1,6 +1,12 @@
+import 'dart:io';
+
 class EnvInfo {
-  // Hardcoded for Sprint 2 local dev; later we should use a .env package (e.g., flutter_dotenv)
-  // Remember that Android emulator uses 10.0.2.2 to access localhost, 
-  // and iOS simulator uses 127.0.0.1. We assume Windows local testing might use localhost.
-  static const String backendBaseUrl = 'http://localhost:8080/api/v1';
+  // Android emulator uses 10.0.2.2 to reach the host machine's localhost.
+  // iOS simulator and desktop use 127.0.0.1 / localhost directly.
+  static String get backendBaseUrl {
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8080/api/v1';
+    }
+    return 'http://localhost:8080/api/v1';
+  }
 }

@@ -10,7 +10,7 @@ import 'package:klyra/features/tutor/presentation/tutor_session_screen.dart';
 part 'app_router.g.dart';
 
 @riverpod
-GoRouter appRouter(AppRouterRef ref) {
+GoRouter appRouter(Ref ref) {
   final authState = ref.watch(authControllerProvider);
 
   return GoRouter(

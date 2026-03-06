@@ -4,7 +4,7 @@ part 'course_models.freezed.dart';
 part 'course_models.g.dart';
 
 @freezed
-class Course with _$Course {
+abstract class Course with _$Course {
   const factory Course({
     required String id,
     @JsonKey(name: 'user_id') required String userId,
@@ -21,7 +21,7 @@ class Course with _$Course {
 }
 
 @freezed
-class CreateCourseRequest with _$CreateCourseRequest {
+abstract class CreateCourseRequest with _$CreateCourseRequest {
   const factory CreateCourseRequest({
     required String name,
     @JsonKey(name: 'education_level') required String educationLevel,
@@ -32,7 +32,7 @@ class CreateCourseRequest with _$CreateCourseRequest {
 }
 
 @freezed
-class Topic with _$Topic {
+abstract class Topic with _$Topic {
   const factory Topic({
     required String id,
     @JsonKey(name: 'course_id') required String courseId,
@@ -47,7 +47,7 @@ class Topic with _$Topic {
 }
 
 @freezed
-class CreateTopicRequest with _$CreateTopicRequest {
+abstract class CreateTopicRequest with _$CreateTopicRequest {
   const factory CreateTopicRequest({
     required String title,
     @JsonKey(name: 'order_index') @Default(0) int orderIndex,

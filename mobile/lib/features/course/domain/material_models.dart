@@ -34,7 +34,7 @@ extension MaterialStatusX on MaterialStatus {
 }
 
 @freezed
-class Material with _$Material {
+abstract class Material with _$Material {
   const factory Material({
     required String id,
     @JsonKey(name: 'topic_id') required String topicId,

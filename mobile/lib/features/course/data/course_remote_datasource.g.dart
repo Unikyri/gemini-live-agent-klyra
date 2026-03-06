@@ -55,4 +55,4 @@ final class CourseRemoteDataSourceProvider
 }
 
 String _$courseRemoteDataSourceHash() =>
-    r'e8d887ed6f58a451790dcb32f3cf57dbac423c50';
+    r'2c7662d2af75040e7e7d32e420d55904a5008e40';

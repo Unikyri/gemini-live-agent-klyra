@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"google.golang.org/api/idtoken"
 )
@@ -26,6 +27,7 @@ func NewGoogleVerifier(clientID string) *GoogleVerifier {
 func (v *GoogleVerifier) Verify(ctx context.Context, idToken string) (email, name, picture string, err error) {
 	payload, err := idtoken.Validate(ctx, idToken, v.clientID)
 	if err != nil {
+		log.Printf("[GoogleVerifier] Validate failed — clientID=%s — error: %v", v.clientID, err)
 		return "", "", "", fmt.Errorf("google token validation failed: %w", err)
 	}
 

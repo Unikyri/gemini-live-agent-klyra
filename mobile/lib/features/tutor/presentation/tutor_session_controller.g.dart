@@ -57,7 +57,7 @@ final class TutorSessionControllerProvider
 }
 
 String _$tutorSessionControllerHash() =>
-    r'f4cc81f7ad463190acdd571f5838c4a995dfac2c';
+    r'66ce593fbc8e6ce7949d771fc1087840fa104c38';
 
 /// TutorSessionController manages the full lifecycle of a Klyra tutoring session:
 /// 1. Fetches RAG context from the backend /context endpoint
