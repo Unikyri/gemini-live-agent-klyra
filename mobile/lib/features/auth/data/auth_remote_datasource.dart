@@ -8,10 +8,15 @@ import 'package:klyra/features/auth/domain/auth_models.dart';
 part 'auth_remote_datasource.g.dart';
 
 @riverpod
-AuthRemoteDataSource authRemoteDataSource(AuthRemoteDataSourceRef ref) {
+AuthRemoteDataSource authRemoteDataSource(Ref ref) {
   final dio = ref.watch(dioClientProvider);
-  // Optional: Add Web Client ID if testing on Web, or iOS Client ID for iOS
-  final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+  // For Android, google_sign_in expects the Web OAuth client as serverClientId
+  // to issue an ID token with the correct audience (`aud`).
+  const webServerClientId = '782011204480-ri7aibqr5f922bqa0se6dpbtc5e5jvj8.apps.googleusercontent.com';
+  final googleSignIn = GoogleSignIn(
+    serverClientId: webServerClientId,
+    scopes: ['email', 'profile'],
+  );
   return AuthRemoteDataSource(dio, googleSignIn);
 }
 
@@ -35,7 +40,11 @@ class AuthRemoteDataSource {
       final idToken = googleAuth.idToken;
 
       if (idToken == null) {
-        throw Exception("Failed to retrieve ID token from Google");
+        throw Exception(
+          "Failed to retrieve ID token from Google. "
+          "Ensure google-services.json exists in mobile/android/app/ "
+          "and SHA-1 fingerprint is registered in Google Cloud Console."
+        );
       }
 
       // 3. Send ID token to Klyra backend to get our own JWTs
