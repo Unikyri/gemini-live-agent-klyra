@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -163,18 +162,15 @@ func isAlreadyExistsMigrationError(err error) bool {
 func getMigrationFiles(migrationsPath string) ([]string, error) {
 	var files []string
 
-	err := filepath.WalkDir(migrationsPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(d.Name(), ".up.sql") {
-			files = append(files, path)
-		}
-		return nil
-	})
-
+	entries, err := os.ReadDir(migrationsPath)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
+			files = append(files, filepath.Join(migrationsPath, entry.Name()))
+		}
 	}
 
 	sort.Strings(files) // Ensures sequential execution (000001, 000002, ...)

@@ -3,48 +3,56 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
-
-	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 )
 
-// PlainTextExtractor implements the TextExtractor port for text-based formats (TXT, MD).
-// PDF extraction is NOT implemented in Sprint 2 — PDF files are stored but not parsed.
-// PDF full extraction (via PDFium or Gemini Doc API) is planned for Sprint 3.
-type PlainTextExtractor struct{}
+// TextExtractorImpl extracts text from various file formats.
+type TextExtractorImpl struct{}
 
-// NewPlainTextExtractor creates a PlainTextExtractor.
-func NewPlainTextExtractor() *PlainTextExtractor {
-	return &PlainTextExtractor{}
+// NewTextExtractor creates a new text extractor instance.
+func NewTextExtractor() *TextExtractorImpl {
+	return &TextExtractorImpl{}
 }
 
-// Extract returns the plain text content from raw bytes.
-// For TXT and MD: returns the content as-is (UTF-8 string).
-// For PDF: returns ErrUnsupportedFormat — caller sets status to "rejected" for PDF in this sprint.
-// For audio: returns ErrUnsupportedFormat — speech-to-text planned for Sprint 4.
-func (e *PlainTextExtractor) Extract(_ context.Context, data []byte, formatType domain.MaterialFormatType) (string, error) {
-	switch formatType {
-	case domain.MaterialFormatTXT, domain.MaterialFormatMD:
-		// SECURITY: trim to 500KB of extracted text to avoid storing massive blobs.
-		// Full content stays in GCS; only the first 500KB is indexed for RAG.
-		const maxExtractedChars = 500_000
-		text := string(data)
-		text = strings.TrimSpace(text)
-		if len(text) > maxExtractedChars {
-			text = text[:maxExtractedChars]
-		}
-		return text, nil
-
-	case domain.MaterialFormatPDF:
-		// PDF parsing will be implemented in Sprint 3 using the Gemini Document AI API.
-		// For now, the file is stored in GCS but text is not extracted.
-		return "", fmt.Errorf("PDF text extraction not yet supported — file stored in Cloud Storage")
-
-	case domain.MaterialFormatAudio:
-		// Speech-to-text transcription planned for Sprint 4 via Gemini speech API.
-		return "", fmt.Errorf("audio transcription not yet supported — file stored in Cloud Storage")
-
+// ExtractText extracts text from files based on content type.
+// Supported: text/plain, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document
+func (t *TextExtractorImpl) ExtractText(ctx context.Context, file interface{}, contentType string) (string, error) {
+	switch contentType {
+	case "text/plain":
+		return t.extractPlainText(file)
+	case "application/pdf":
+		return t.extractPDFText(file)
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		return t.extractDocxText(file)
 	default:
-		return "", fmt.Errorf("unsupported format: %s", formatType)
+		return "", fmt.Errorf("unsupported content type: %s", contentType)
 	}
+}
+
+func (t *TextExtractorImpl) extractPlainText(file interface{}) (string, error) {
+	readCloser, ok := file.(io.ReadCloser)
+	if !ok {
+		return "", fmt.Errorf("invalid file type")
+	}
+	defer readCloser.Close()
+
+	bytes, err := io.ReadAll(readCloser)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return string(bytes), nil
+}
+
+func (t *TextExtractorImpl) extractPDFText(file interface{}) (string, error) {
+	// TODO: Integrate pdfcpu or similar PDF parsing library
+	// For MVP, return placeholder
+	return "[PDF text extraction not yet implemented]", nil
+}
+
+func (t *TextExtractorImpl) extractDocxText(file interface{}) (string, error) {
+	// TODO: Integrate unidoc or similar DOCX parsing library
+	// For MVP, return placeholder
+	return "[DOCX text extraction not yet implemented]", nil
 }

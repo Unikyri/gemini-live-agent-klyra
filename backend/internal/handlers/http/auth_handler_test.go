@@ -95,7 +95,8 @@ func setupAuthHandler(authUseCase *usecases.AuthUseCase) *AuthHandler {
 	return NewAuthHandler(authUseCase)
 }
 
-func TestAuthHandler_SignIn_Google_Success(t *testing.T) {
+// Test case: GoogleSignIn with valid token
+func TestAuthHandler_GoogleSignIn_Success(t *testing.T) {
 	userRepo := &testAuthMockUserRepository{
 		usersByID:    make(map[string]*domain.User),
 		usersByEmail: make(map[string]*domain.User),
@@ -106,16 +107,17 @@ func TestAuthHandler_SignIn_Google_Success(t *testing.T) {
 	authUseCase := usecases.NewAuthUseCase(userRepo, tokenSvc, googleVerifier)
 	handler := setupAuthHandler(authUseCase)
 
+	// Setup Gin test context
 	router := gin.New()
-	router.POST("/auth/login", handler.SignIn)
+	router.POST("/auth/google", handler.GoogleSignIn)
 
+	// Prepare request
 	reqBody := map[string]string{
-		"provider": "google",
 		"id_token": "valid_token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/auth/google", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -124,9 +126,25 @@ func TestAuthHandler_SignIn_Google_Success(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
+
+	var respBody map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &respBody)
+
+	if _, ok := respBody["access_token"]; !ok {
+		t.Error("expected access_token in response")
+	}
+
+	if _, ok := respBody["refresh_token"]; !ok {
+		t.Error("expected refresh_token in response")
+	}
+
+	if _, ok := respBody["user"]; !ok {
+		t.Error("expected user in response")
+	}
 }
 
-func TestAuthHandler_SignIn_Guest_Success(t *testing.T) {
+// Test case: GoogleSignIn missing id_token
+func TestAuthHandler_GoogleSignIn_MissingIDToken(t *testing.T) {
 	userRepo := &testAuthMockUserRepository{
 		usersByID:    make(map[string]*domain.User),
 		usersByEmail: make(map[string]*domain.User),
@@ -138,22 +156,89 @@ func TestAuthHandler_SignIn_Guest_Success(t *testing.T) {
 	handler := setupAuthHandler(authUseCase)
 
 	router := gin.New()
-	router.POST("/auth/login", handler.SignIn)
+	router.POST("/auth/google", handler.GoogleSignIn)
 
-	reqBody := map[string]string{
-		"provider": "guest",
-		"email":    "guest@example.com",
-		"name":     "Guest User",
-	}
+	// Request without id_token
+	reqBody := map[string]string{}
 	bodyBytes, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/auth/google", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+// Test case: GoogleSignIn with invalid token
+func TestAuthHandler_GoogleSignIn_InvalidToken(t *testing.T) {
+	userRepo := &testAuthMockUserRepository{
+		usersByID:    make(map[string]*domain.User),
+		usersByEmail: make(map[string]*domain.User),
+	}
+	tokenSvc := &testAuthMockTokenService{}
+	googleVerifier := &testAuthMockGoogleTokenVerifier{}
+
+	authUseCase := usecases.NewAuthUseCase(userRepo, tokenSvc, googleVerifier)
+	handler := setupAuthHandler(authUseCase)
+
+	router := gin.New()
+	router.POST("/auth/google", handler.GoogleSignIn)
+
+	reqBody := map[string]string{
+		"id_token": "invalid",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/google", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+	}
+}
+
+// Test case: GoogleSignIn returns user data
+func TestAuthHandler_GoogleSignIn_ReturnsUserData(t *testing.T) {
+	userRepo := &testAuthMockUserRepository{
+		usersByID:    make(map[string]*domain.User),
+		usersByEmail: make(map[string]*domain.User),
+	}
+	tokenSvc := &testAuthMockTokenService{}
+	googleVerifier := &testAuthMockGoogleTokenVerifier{}
+
+	authUseCase := usecases.NewAuthUseCase(userRepo, tokenSvc, googleVerifier)
+	handler := setupAuthHandler(authUseCase)
+
+	router := gin.New()
+	router.POST("/auth/google", handler.GoogleSignIn)
+
+	reqBody := map[string]string{
+		"id_token": "valid_token",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/google", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var respBody map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &respBody)
+
+	user, ok := respBody["user"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected user object in response")
+	}
+
+	if email, ok := user["email"].(string); !ok || email != "test@example.com" {
+		t.Errorf("expected email 'test@example.com', got '%v'", user["email"])
 	}
 }

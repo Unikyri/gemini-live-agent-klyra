@@ -159,7 +159,7 @@
 
 **Success Criteria**:
 - ✅ Feedback persisted to database
-- ✅ Subsequent searches for same topic reflectuser preference
+- ✅ Subsequent searches for same topic reflect user preference
 - ✅ Admin dashboard shows feedback statistics
 
 **Owner**: Optional (backlog if time limited)  
@@ -188,7 +188,7 @@
 ## Resource Allocation
 
 | Phase | Owner | Role | Effort | Parallel? |
-|-------|-------|------|--------|-----------|
+|-------|-------|------|--------|----------|
 | 5B.1 | DevOps | Cloud Run, Cloud SQL setup, smoke tests | 1-2d | Independent |
 | 5B.2 | Frontend | Flutter widget tests | 3-4d | Yes, with 5B.3 |
 | 5B.3 | QA | Backend integration tests | 2-3d | Yes, with 5B.2 |
@@ -203,7 +203,7 @@
 ## Known Risks & Mitigation
 
 | Risk | Likelihood | Mitigation |
-|------|-----------|-----------|
+|------|-----------|----------|
 | Cloud SQL connectivity issues | Medium | Test Cloud SQL Proxy locally before staging (Docker container simulating Unix socket) |
 | pgvector query timeout | Low | Profile queries against 10k+ real chunks; benchmark IVFFlat vs HNSW if needed |
 | Flutter widget test flakiness | Medium | Mock all async operations (Network, DB), avoid real HTTP in tests |

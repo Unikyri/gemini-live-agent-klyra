@@ -100,7 +100,7 @@ GetTopicContext(ctx, topicID, query)
 - Added `CloudSQLConnectionTest()` for startup health checks
 - Ready for Cloud SQL Proxy deployment (unix socket connection)
 
-#### **4. pgvector Migration** (`migrations/000004_add_pgvector_and_chunks.*)
+#### **4. pgvector Migration** (`migrations/000004_add_pgvector_and_chunks.*`)
 ```sql
 CREATE TABLE material_chunks (
   id UUID PRIMARY KEY,
@@ -122,7 +122,7 @@ CREATE INDEX idx_chunks_embedding_ivfflat
 ### Test Coverage
 
 | Test Class | Count | Key Validations |
-|-----------|-------|-----------------|
+|-----------|-------|------------------|
 | RAGUseCase (unit) | 13 | Chunking, embedding, context retrieval, error handling |
 | ChunkRepository (integration) | 5 | pgvector storage, topicID scoping, idempotence |
 | CloudSQLAdapter (integration) | 4 | Connection validation, delegation, cross-topic isolation |
@@ -169,7 +169,7 @@ Mobile Tests                   ─── 4 tests (Flutter datasource, app bootst
 TOTAL PASSING:                   63 tests
 ```
 
-**Full traceability**: [sprint4-verify-matrix.md](sprint4-verify-matrix.md) (63 test → RFC links)
+**Full traceability**: See sprint4-verify-matrix.md (63 test → RFC links)
 
 ---
 
@@ -300,7 +300,7 @@ Result: Cloud parity without code duplication
    - System prompt includes top-3 relevant chunks as context
 
 5. **Performance Tuning** (if needed):
-   - Monitor chunk query latency: `psql -c "EXPLAIN ANALYZE (SELECT ... FROM material_chunks WHERE embedding <=> ...);"`
+   - Monitor chunk query latency: `psql -c "EXPLAIN ANALYZE (SELECT ... FROM material_chunks WHERE embedding <=> ...);`
    - If >10ms: rebuild IVFFlat index with higher `lists` parameter
    - If >100k chunks: test HNSW index migration
 

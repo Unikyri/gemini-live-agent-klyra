@@ -13,7 +13,7 @@ VALUES
    '550e8400-e29b-41d4-a716-446655440001'::uuid,
    '550e8400-e29b-41d4-a716-446655440002'::uuid,
    0,
-   'Una sinapsis es la conexiÛn entre neuronas. Los neurotransmisores se liberan desde la terminal pre-sin·ptica.',
+   'Una sinapsis es la conexi√≥n entre neuronas. Los neurotransmisores se liberan desde la terminal pre-sin√°ptica.',
    '[0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0,0.1,0.15,0.2,0.25,0.3]'::vector);
 
 INSERT INTO material_chunks 
@@ -33,7 +33,7 @@ VALUES
    '550e8400-e29b-41d4-a716-446655440001'::uuid,
    '550e8400-e29b-41d4-a716-446655440002'::uuid,
    2,
-   'La plasticidad neuronal permite al cerebro reorganizarse y formar nuevas conexiones sin·pticas.',
+   'La plasticidad neuronal permite al cerebro reorganizarse y formar nuevas conexiones sin√°pticas.',
    '[0.11,0.16,0.21,0.26,0.31,0.36,0.41,0.46,0.51,0.56,0.61,0.66,0.71,0.76,0.81,0.86,0.91,0.96,0.99,0.11,0.16,0.21,0.26,0.31]'::vector);
 
 INSERT INTO material_chunks 
@@ -43,7 +43,7 @@ VALUES
    '550e8400-e29b-41d4-a716-446655440001'::uuid,
    '550e8400-e29b-41d4-a716-446655440002'::uuid,
    3,
-   'Python es un lenguaje de programaciÛn de alto nivel interpretado que soporta m˙ltiples paradigmas.',
+   'Python es un lenguaje de programaci√≥n de alto nivel interpretado que soporta m√∫ltiples paradigmas.',
    '[0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5,0.45,0.4,0.35,0.3,0.25,0.2,0.15,0.1,0.05,0.95,0.9,0.85,0.8,0.75]'::vector);
 
 INSERT INTO material_chunks 
@@ -53,7 +53,7 @@ VALUES
    '550e8400-e29b-41d4-a716-446655440001'::uuid,
    '550e8400-e29b-41d4-a716-446655440002'::uuid,
    4,
-   'JavaScript es el lenguaje para desarrollo web. Permite interactividad en navegadores y ejecuciÛn con Node.js.',
+   'JavaScript es el lenguaje para desarrollo web. Permite interactividad en navegadores y ejecuci√≥n con Node.js.',
    '[0.93,0.88,0.83,0.78,0.73,0.68,0.63,0.58,0.53,0.48,0.43,0.38,0.33,0.28,0.23,0.18,0.13,0.08,0.03,0.93,0.88,0.83,0.78,0.73]'::vector);
 
 COMMIT;
