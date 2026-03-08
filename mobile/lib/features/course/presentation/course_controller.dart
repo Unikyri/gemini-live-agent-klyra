@@ -25,4 +25,14 @@ class CourseController extends _$CourseController {
       return _fetchCourses();
     });
   }
+
+  Future<void> addTopic(String courseId, String title) async {
+    // Keep current state and update in-place to avoid full list reload
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(courseRepositoryProvider);
+      await repo.addTopic(courseId, title);
+      // Re-fetch courses to get the updated topics list
+      return _fetchCourses();
+    });
+  }
 }

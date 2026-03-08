@@ -18,4 +18,6 @@ class CourseRepository {
   Future<List<Course>> getCourses() => _remote.getCourses();
 
   Future<Course> createCourse(CreateCourseRequest request) => _remote.createCourse(request);
+
+  Future<Topic> addTopic(String courseId, String title) => _remote.addTopic(courseId, title);
 }

@@ -51,7 +51,7 @@ final class MaterialControllerProvider
 }
 
 String _$materialControllerHash() =>
-    r'3cce5094add608e8e48763dcb055697def0eabef';
+    r'89ee8f52b24100443c4e20d38da6eda6e8af46f1';
 
 final class MaterialControllerFamily extends $Family
     with

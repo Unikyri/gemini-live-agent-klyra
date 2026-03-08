@@ -33,7 +33,7 @@ final class CourseControllerProvider
   CourseController create() => CourseController();
 }
 
-String _$courseControllerHash() => r'9589a8c0d6dbf9bf925794cab80fb06c8f1ba5ee';
+String _$courseControllerHash() => r'2cab8419e46bfe90db371703338e7093958de3c8';
 
 abstract class _$CourseController extends $AsyncNotifier<List<Course>> {
   FutureOr<List<Course>> build();

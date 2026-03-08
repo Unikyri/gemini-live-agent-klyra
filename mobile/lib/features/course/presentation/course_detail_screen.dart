@@ -217,14 +217,30 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
               final title = controller.text.trim();
               if (title.isEmpty) return;
               Navigator.pop(ctx);
-              // Note: AddTopic support in backend via POST /courses/:id/topics was built in US2.
-              // For Sprint 3 MVP we re-fetch the course list to get the updated topics list.
-              // TODO: Implement dedicated AddTopic action in CourseController
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(
-                  content: Text('Topic added! US8 will integrate this into RAG.'),
-                ),
-              );
+              
+              try {
+                // Call the addTopic action from CourseController
+                await ref.read(courseControllerProvider.notifier).addTopic(course.id, title);
+                
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                      content: Text('Topic "$title" added successfully!'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to add topic: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Add'),
           ),

@@ -55,4 +55,4 @@ final class AuthRemoteDataSourceProvider
 }
 
 String _$authRemoteDataSourceHash() =>
-    r'8e25f80b8baa2661fe9180497cd3f268a881a818';
+    r'a7749fe6e34f15c4ff079db99a582eb3ef49f88c';

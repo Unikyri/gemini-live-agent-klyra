@@ -44,4 +44,16 @@ class CourseRemoteDataSource {
       throw Exception('Failed to create course: ${response.statusCode}');
     }
   }
+
+  Future<Topic> addTopic(String courseId, String title) async {
+    final response = await _dio.post(
+      '/courses/$courseId/topics',
+      data: {'title': title},
+    );
+    if (response.statusCode == 201) {
+      return Topic.fromJson(response.data);
+    } else {
+      throw Exception('Failed to add topic: ${response.statusCode}');
+    }
+  }
 }
