@@ -1,74 +1,108 @@
 package repositories
 
 import (
+	"context"
+	"crypto/rand"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-
-	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 )
 
-// JWTService implements ports.TokenService using the golang-jwt library.
-type JWTService struct {
-	accessSecret  string
-	refreshSecret string
-	accessTTL     time.Duration // 15 minutes
-	refreshTTL    time.Duration // 7 days
+// JWTServiceImpl implements token generation and validation.
+type JWTServiceImpl struct {
+	acccessSecret  string
+	refreshSecret  string
+	accessExpiry   time.Duration
+	refreshExpiry  time.Duration
 }
 
-// NewJWTService creates a JWTService with the provided secrets and TTLs.
-func NewJWTService(accessSecret, refreshSecret string) *JWTService {
-	return &JWTService{
+// NewJWTService creates a new JWT service with configured secrets and expiry times.
+func NewJWTService(accessSecret, refreshSecret string, accessExpiry, refreshExpiry time.Duration) *JWTServiceImpl {
+	return &JWTServiceImpl{
 		accessSecret:  accessSecret,
 		refreshSecret: refreshSecret,
-		accessTTL:     15 * time.Minute,
-		refreshTTL:    7 * 24 * time.Hour,
+		accessExpiry:  accessExpiry,
+		refreshExpiry: refreshExpiry,
 	}
 }
 
-// GenerateAccessToken creates a short-lived JWT with user claims.
-// SECURITY: Do NOT include sensitive data (passwords, PII) in the JWT payload.
-func (s *JWTService) GenerateAccessToken(user *domain.User) (string, error) {
-	claims := jwt.MapClaims{
-		"sub":   user.ID.String(),
-		"email": user.Email,
-		"name":  user.Name,
-		"exp":   time.Now().Add(s.accessTTL).Unix(),
-		"iat":   time.Now().Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.accessSecret))
+// jwtClaims custom claims structure for JWT tokens
+type jwtClaims struct {
+	UserID string `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
-// GenerateRefreshToken creates a signed, long-lived token for secure rotation.
-// The `jti` (JWT ID) claim enables per-token revocation in future iterations.
-func (s *JWTService) GenerateRefreshToken(userID string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub":  userID,
-		"type": "refresh",
-		"jti":  uuid.New().String(),
-		"exp":  time.Now().Add(s.refreshTTL).Unix(),
+// GenerateTokens creates access (15min) and refresh (7d) tokens
+func (s *JWTServiceImpl) GenerateTokens(userID string) (accessToken, refreshToken string, err error) {
+	// Access token (short-lived)
+	accessClaims := jwtClaims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessExpiry)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.refreshSecret))
+
+	accessJWT := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	accessToken, err = accessJWT.SignedString([]byte(s.acccessSecret))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign access token: %w", err)
+	}
+
+	// Refresh token (long-lived)
+	refreshClaims := jwtClaims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.refreshExpiry)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	refreshJWT := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+	refreshToken, err = refreshJWT.SignedString([]byte(s.refreshSecret))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign refresh token: %w", err)
+	}
+
+	return accessToken, refreshToken, nil
 }
 
-// ValidateAccessToken parses and verifies a JWT, returning the claims map.
-func (s *JWTService) ValidateAccessToken(tokenString string) (map[string]interface{}, error) {
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(s.accessSecret), nil
+// ValidateAccessToken validates and extracts user ID from access token
+func (s *JWTServiceImpl) ValidateAccessToken(token string) (userID string, err error) {
+	claims := &jwtClaims{}
+	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.acccessSecret), nil
 	})
-	if err != nil || !token.Valid {
-		return nil, fmt.Errorf("invalid token: %w", err)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse access token: %w", err)
 	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
+
+	return claims.UserID, nil
+}
+
+// ValidateRefreshToken validates and extracts user ID from refresh token
+func (s *JWTServiceImpl) ValidateRefreshToken(token string) (userID string, err error) {
+	claims := &jwtClaims{}
+	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.refreshSecret), nil
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse refresh token: %w", err)
 	}
-	return claims, nil
+
+	return claims.UserID, nil
+}
+
+// RefreshAccessToken generates a new access token from a valid refresh token
+func (s *JWTServiceImpl) RefreshAccessToken(refreshToken string) (newAccessToken string, err error) {
+	userID, err := s.ValidateRefreshToken(refreshToken)
+	if err != nil {
+		return "", fmt.Errorf("invalid refresh token: %w", err)
+	}
+
+	newAccessToken, _, err = s.GenerateTokens(userID)
+	return newAccessToken, err
 }
