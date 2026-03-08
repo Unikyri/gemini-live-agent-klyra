@@ -349,3 +349,69 @@ func TestCourseUseCase_CreateCourse_StorageUploadError(t *testing.T) {
 		t.Error("expected ReferenceImageURL to be empty when upload fails")
 	}
 }
+
+func TestCourseUseCase_AddTopic_Success(t *testing.T) {
+	courseRepo := NewMockCourseRepository()
+	topicRepo := NewMockTopicRepository()
+	storageService := NewMockStorageService()
+	avatarGen := NewMockAvatarGenerator()
+
+	uc := NewCourseUseCase(courseRepo, topicRepo, storageService, avatarGen)
+
+	userID := uuid.New().String()
+	createdCourse, err := uc.CreateCourse(context.Background(), CreateCourseInput{
+		UserID:         userID,
+		Name:           "Calculus",
+		EducationLevel: "university",
+	})
+	if err != nil {
+		t.Fatalf("CreateCourse failed: %v", err)
+	}
+
+	topic, err := uc.AddTopic(context.Background(), createdCourse.ID.String(), userID, "Limits")
+	if err != nil {
+		t.Fatalf("AddTopic failed: %v", err)
+	}
+
+	if topic == nil {
+		t.Fatal("expected topic, got nil")
+	}
+
+	if topic.Title != "Limits" {
+		t.Errorf("expected topic title 'Limits', got '%s'", topic.Title)
+	}
+
+	if topic.CourseID != createdCourse.ID {
+		t.Errorf("expected course ID %s, got %s", createdCourse.ID, topic.CourseID)
+	}
+}
+
+func TestCourseUseCase_AddTopic_ForbiddenWhenNotOwner(t *testing.T) {
+	courseRepo := NewMockCourseRepository()
+	topicRepo := NewMockTopicRepository()
+	storageService := NewMockStorageService()
+	avatarGen := NewMockAvatarGenerator()
+
+	uc := NewCourseUseCase(courseRepo, topicRepo, storageService, avatarGen)
+
+	ownerID := uuid.New().String()
+	otherUserID := uuid.New().String()
+
+	createdCourse, err := uc.CreateCourse(context.Background(), CreateCourseInput{
+		UserID:         ownerID,
+		Name:           "Physics",
+		EducationLevel: "high school",
+	})
+	if err != nil {
+		t.Fatalf("CreateCourse failed: %v", err)
+	}
+
+	topic, err := uc.AddTopic(context.Background(), createdCourse.ID.String(), otherUserID, "Kinematics")
+	if !errors.Is(err, ErrCourseForbidden) {
+		t.Fatalf("expected ErrCourseForbidden, got: %v", err)
+	}
+
+	if topic != nil {
+		t.Fatal("expected nil topic when user is not owner")
+	}
+}

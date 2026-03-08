@@ -1,145 +1,94 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+import 'package:dio/src/adapters/io_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 
 import 'package:klyra/features/auth/data/auth_remote_datasource.dart';
-import 'package:klyra/features/auth/domain/auth_models.dart';
 
-class MockDio extends Mock implements Dio {}
+class _AuthFakeAdapter extends IOHttpClientAdapter {
+  RequestOptions? lastRequest;
 
-void main() {
-  group('AuthRemoteDataSource - Phase 4 Migration Tests', () {
-    late MockDio mockDio;
-    late AuthRemoteDataSource datasource;
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    lastRequest = options;
 
-    setUp(() {
-      mockDio = MockDio();
-      datasource = AuthRemoteDataSource(mockDio, null); // null googleSignIn since we're not testing OAuth flow
-    });
-
-    test('_signInWithProvider: Guest login uses unified endpoint (/auth/login)', () async {
-      // Arrange
-      final mockResponse = Response(
-        data: {
-          'access_token': 'test_access_token',
-          'refresh_token': 'test_refresh_token',
-          'user': {
-            'id': 'user_123',
-            'email': 'guest@example.com',
-            'name': 'Guest User',
-            'profile_image_url': 'https://example.com/pic.jpg',
-          },
-          'provider': 'guest',
-        },
-        statusCode: 200,
-        requestOptions: RequestOptions(path: '/auth/login'),
-      );
-
-      when(mockDio.post(
-        '/auth/login',
-        data: anyNamed('data'),
-      )).thenAnswer((_) async => mockResponse);
-
-      // Act
-      final result = await datasource.signInAsGuest();
-
-      // Assert
-      verify(mockDio.post(
-        '/auth/login',
-        data: {
-          'provider': 'guest',
+    if (options.path == '/auth/login' && options.method == 'POST') {
+      final payload = jsonEncode({
+        'access_token': 'test_access_token',
+        'refresh_token': 'test_refresh_token',
+        'user': {
+          'id': 'user_123',
           'email': 'guest@example.com',
           'name': 'Guest User',
+          'profile_image_url': 'https://example.com/pic.jpg',
         },
-      )).called(1);
+        'provider': 'guest',
+      });
+      return ResponseBody.fromString(
+        payload,
+        200,
+        headers: {Headers.contentTypeHeader: ['application/json']},
+      );
+    }
+
+    return ResponseBody.fromString(
+      jsonEncode({'error': 'not found'}),
+      404,
+      headers: {Headers.contentTypeHeader: ['application/json']},
+    );
+  }
+}
+
+void main() {
+  group('AuthRemoteDataSource migration', () {
+    test('signInAsGuest uses unified endpoint /auth/login', () async {
+      final dio = Dio();
+      final adapter = _AuthFakeAdapter();
+      dio.httpClientAdapter = adapter;
+
+      final datasource = AuthRemoteDataSource(dio, null);
+
+      final result = await datasource.signInAsGuest();
 
       expect(result.accessToken, 'test_access_token');
       expect(result.refreshToken, 'test_refresh_token');
       expect(result.user?.email, 'guest@example.com');
+      expect(adapter.lastRequest?.path, '/auth/login');
+      expect(adapter.lastRequest?.method, 'POST');
+      expect(adapter.lastRequest?.data, isA<Map<String, dynamic>>());
+
+      final payload = adapter.lastRequest?.data as Map<String, dynamic>;
+      expect(payload['provider'], 'guest');
+      expect(payload['email'], 'guest@example.com');
+      expect(payload['name'], 'Guest User');
     });
 
-    test('_signInWithProvider: Falls back to legacy endpoint on 404', () async {
-      // Arrange
-      final legacyResponse = Response(
-        data: {
-          'access_token': 'legacy_token',
-          'refresh_token': 'legacy_refresh',
-          'user': {
-            'id': 'user_456',
-            'email': 'guest@example.com',
-            'name': 'Guest User',
-            'profile_image_url': 'https://example.com/pic.jpg',
-          },
-        },
-        statusCode: 200,
-        requestOptions: RequestOptions(path: '/auth/google-mock'),
-      );
+    test('signInAsGuest keeps public API for custom email and name', () async {
+      final dio = Dio();
+      final adapter = _AuthFakeAdapter();
+      dio.httpClientAdapter = adapter;
 
-      // First call (unified endpoint) throws 404
-      when(mockDio.post(
-        '/auth/login',
-        data: anyNamed('data'),
-      )).thenThrow(
-        DioException(
-          requestOptions: RequestOptions(path: '/auth/login'),
-          response: Response(
-            statusCode: 404,
-            requestOptions: RequestOptions(path: '/auth/login'),
-          ),
-        ),
-      );
+      final datasource = AuthRemoteDataSource(dio, null);
 
-      // Fallback call (legacy endpoint) succeeds
-      when(mockDio.post(
-        '/auth/google-mock',
-        data: anyNamed('data'),
-      )).thenAnswer((_) async => legacyResponse);
-
-      // Act
-      final result = await datasource.signInAsGuest();
-
-      // Assert
-      // Should have tried unified endpoint first, then fallen back to legacy
-      verify(mockDio.post('/auth/login', data: anyNamed('data'))).called(1);
-      verify(mockDio.post(
-        '/auth/google-mock',
-        data: {
-          'email': 'guest@example.com',
-          'name': 'Guest User',
-        },
-      )).called(1);
-
-      expect(result.accessToken, 'legacy_token');
-    });
-
-    test('signInAsGuest: Public API unchanged (backward compatible)', () async {
-      // Verify that the public API still accepts the same parameters
-      final mockResponse = Response(
-        data: {
-          'access_token': 'token',
-          'refresh_token': 'refresh',
-          'user': {
-            'id': 'user',
-            'email': 'custom@example.com',
-            'name': 'Custom User',
-            'profile_image_url': 'https://example.com/pic.jpg',
-          },
-        },
-        statusCode: 200,
-        requestOptions: RequestOptions(path: '/auth/login'),
-      );
-
-      when(mockDio.post(anyNamed('url'), data: anyNamed('data')))
-          .thenAnswer((_) async => mockResponse);
-
-      // Act & Assert - should not throw
       final result = await datasource.signInAsGuest(
         email: 'custom@example.com',
         name: 'Custom User',
       );
 
-      expect(result.user?.email, 'custom@example.com');
-      expect(result.user?.name, 'Custom User');
+      expect(result.accessToken, 'test_access_token');
+      expect(adapter.lastRequest?.path, '/auth/login');
+
+      final payload = adapter.lastRequest?.data as Map<String, dynamic>;
+      expect(payload['provider'], 'guest');
+      expect(payload['email'], 'custom@example.com');
+      expect(payload['name'], 'Custom User');
     });
   });
 }
