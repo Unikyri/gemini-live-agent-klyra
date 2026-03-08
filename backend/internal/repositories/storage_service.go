@@ -3,33 +3,55 @@ package repositories
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // LocalStorageService is a development stub for ports.StorageService.
 // It logs the upload request but does NOT actually upload anything.
 // Replace with CloudStorageService for production.
 type LocalStorageService struct {
-	BaseURL string // base URL for simulating returned file URLs locally
+	BaseURL  string // base URL for returned file URLs locally
+	BasePath string // root path for local files
 }
 
 // NewLocalStorageService creates a stub storage service for local development.
-func NewLocalStorageService() *LocalStorageService {
-	return &LocalStorageService{BaseURL: "http://localhost:8080/static"}
+func NewLocalStorageService(basePath string) *LocalStorageService {
+	if strings.TrimSpace(basePath) == "" {
+		basePath = "./storage"
+	}
+	return &LocalStorageService{
+		BaseURL:  "http://localhost:8080/static",
+		BasePath: basePath,
+	}
 }
 
-// UploadFile simulates a file upload and returns a placeholder URL.
-// TODO (US3 / DevOps): Replace with google.golang.org/api/storage to upload to GCS.
+// UploadFile writes the file to local disk and returns a predictable static URL.
 func (s *LocalStorageService) UploadFile(ctx context.Context, bucket, objectName string, data []byte, contentType string) (string, error) {
-	log.Printf("[LocalStorage] Simulating upload: bucket=%s object=%s size=%d bytes type=%s",
-		bucket, objectName, len(data), contentType)
+	_ = ctx
+	_ = contentType
 
 	if len(data) == 0 {
 		return "", fmt.Errorf("upload failed: empty file")
 	}
+	if strings.TrimSpace(objectName) == "" {
+		return "", fmt.Errorf("upload failed: objectName is required")
+	}
 
-	// Returns a predictable URL for development testing.
-	url := fmt.Sprintf("%s/%s", s.BaseURL, objectName)
-	log.Printf("[LocalStorage] Simulated URL: %s", url)
+	cleanObject := filepath.Clean(objectName)
+	cleanObject = strings.TrimPrefix(cleanObject, string(filepath.Separator))
+	fullPath := filepath.Join(s.BasePath, cleanObject)
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return "", fmt.Errorf("upload failed: cannot create directory: %w", err)
+	}
+
+	if err := os.WriteFile(fullPath, data, 0o644); err != nil {
+		return "", fmt.Errorf("upload failed: cannot write file: %w", err)
+	}
+
+	publicObject := strings.ReplaceAll(cleanObject, "\\", "/")
+	url := fmt.Sprintf("%s/%s", strings.TrimRight(s.BaseURL, "/"), publicObject)
 	return url, nil
 }

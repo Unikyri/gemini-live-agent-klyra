@@ -1,7 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:klyra/core/utils/web_file_picker.dart';
 import 'package:klyra/features/course/domain/material_models.dart' as domain;
 import 'package:klyra/features/course/presentation/material_controller.dart';
 
@@ -19,18 +18,29 @@ class MaterialListView extends ConsumerWidget {
   });
 
   Future<void> _pickAndUpload(BuildContext context, WidgetRef ref) async {
-    // SECURITY: restrict allowed extensions at the client level before picking
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'txt', 'md'],
-    );
-    if (result == null || result.files.single.path == null) return;
+    final picked = await WebFilePicker.pickDocument();
+    if (picked == null) return;
 
-    final file = File(result.files.single.path!);
+    // SECURITY: allow only expected extensions at client side.
+    const allowedExtensions = {'pdf', 'txt', 'md'};
+    final extension = (picked.extension ?? '').toLowerCase();
+    if (!allowedExtensions.contains(extension)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only PDF, TXT or MD files are allowed.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
+    final platformFile = picked.toPlatformFile();
     await ref
         .read(materialControllerProvider(
             courseId: courseId, topicId: topicId).notifier)
-        .uploadFile(file);
+        .uploadFile(platformFile);
 
     if (context.mounted) {
       final state = ref.read(
@@ -166,8 +176,8 @@ class _MaterialTile extends StatelessWidget {
               ?.copyWith(color: statusColor, fontWeight: FontWeight.bold),
         ),
         avatar: Icon(statusIcon, size: 14, color: statusColor),
-        backgroundColor: statusColor.withOpacity(0.1),
-        side: BorderSide(color: statusColor.withOpacity(0.4)),
+        backgroundColor: statusColor.withValues(alpha: 0.1),
+        side: BorderSide(color: statusColor.withValues(alpha: 0.4)),
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
     );

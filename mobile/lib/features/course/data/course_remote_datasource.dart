@@ -27,14 +27,21 @@ class CourseRemoteDataSource {
   }
 
   Future<Course> createCourse(CreateCourseRequest request) async {
+    // Convert CreateCourseRequest to FormData (backend expects multipart/form-data)
+    final formData = FormData.fromMap({
+      'name': request.name,
+      'education_level': request.educationLevel,
+      // reference_image is optional; omitted for now
+    });
+
     final response = await _dio.post(
       '/courses',
-      data: request.toJson(),
+      data: formData,
     );
     if (response.statusCode == 201) {
       return Course.fromJson(response.data);
     } else {
-      throw Exception('Failed to create course');
+      throw Exception('Failed to create course: ${response.statusCode}');
     }
   }
 }

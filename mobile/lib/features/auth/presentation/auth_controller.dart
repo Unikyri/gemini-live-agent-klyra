@@ -31,6 +31,15 @@ class AuthController extends _$AuthController {
     });
   }
 
+  /// Sign in as a guest user (development/testing only)
+  Future<void> signInAsGuest({String email = 'guest@example.com', String name = 'Guest User'}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(authRepositoryProvider);
+      return await repo.signInAsGuest(email: email, name: name);
+    });
+  }
+
   Future<void> signOut() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {

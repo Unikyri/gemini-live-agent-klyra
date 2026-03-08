@@ -32,6 +32,14 @@ class AuthRepository {
     return result.user;
   }
 
+  /// Guest login (development/testing only) - no backend validation
+  Future<User> signInAsGuest({String email = 'guest@example.com', String name = 'Guest User'}) async {
+    final AuthResult result = await _remoteDataSource.signInAsGuest(email: email, name: name);
+    await _secureStorage.write(key: StorageKeys.accessToken, value: result.accessToken);
+    await _secureStorage.write(key: StorageKeys.refreshToken, value: result.refreshToken);
+    return result.user;
+  }
+
   Future<void> signOut() async {
     await _remoteDataSource.signOut();
     await _secureStorage.delete(key: StorageKeys.accessToken);

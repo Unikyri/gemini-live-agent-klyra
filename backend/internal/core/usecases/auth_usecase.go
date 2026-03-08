@@ -15,6 +15,7 @@ type AuthUseCase struct {
 	userRepo       ports.UserRepository
 	tokenSvc       ports.TokenService
 	googleVerifier ports.GoogleTokenVerifier
+	strategies     map[string]ports.AuthStrategy
 }
 
 // NewAuthUseCase creates and returns an AuthUseCase instance.
@@ -23,53 +24,62 @@ func NewAuthUseCase(
 	userRepo ports.UserRepository,
 	tokenSvc ports.TokenService,
 	googleVerifier ports.GoogleTokenVerifier,
+	strategyMaps ...map[string]ports.AuthStrategy,
 ) *AuthUseCase {
+	strategies := map[string]ports.AuthStrategy{}
+	if len(strategyMaps) > 0 && strategyMaps[0] != nil {
+		for key, strategy := range strategyMaps[0] {
+			if strategy != nil {
+				strategies[key] = strategy
+			}
+		}
+	} else {
+		// Default strategies keep backward compatibility with existing wiring.
+		strategies["google"] = &googleDefaultStrategy{verifier: googleVerifier}
+		strategies["guest"] = &guestDefaultStrategy{}
+	}
+
 	return &AuthUseCase{
 		userRepo:       userRepo,
 		tokenSvc:       tokenSvc,
 		googleVerifier: googleVerifier,
+		strategies:     strategies,
 	}
 }
 
-// AuthResult holds the tokens returned to the client after successful login.
-type AuthResult struct {
-	AccessToken  string       `json:"access_token"`
-	RefreshToken string       `json:"refresh_token"`
-	User         *domain.User `json:"user"`
-}
-
-// GoogleSignIn validates a Google ID Token, then finds or creates the user in our system.
-// This implements the "find or create" (upsert-like) pattern common in OAuth2 flows.
-func (uc *AuthUseCase) GoogleSignIn(ctx context.Context, googleIDToken string) (*AuthResult, error) {
-	// Step 1: Verify the token with Google's servers.
-	email, name, picture, err := uc.googleVerifier.Verify(ctx, googleIDToken)
-	if err != nil {
-		return nil, errors.New("invalid Google ID token")
+// Login authenticates a user using a provider strategy, then executes the common
+// find-or-create + token issuance flow.
+func (uc *AuthUseCase) Login(ctx context.Context, provider string, credentials domain.AuthCredentials) (*domain.AuthResult, error) {
+	strategy, ok := uc.strategies[provider]
+	if !ok || strategy == nil {
+		return nil, errors.New("unsupported auth provider")
 	}
 
-	// Step 2: Find or create the user in our database.
-	// SECURITY (WARNING fix): FindByEmail now returns (nil, nil) for "not found"
-	// and (nil, err) for real DB errors. Treating any error as "not found" could
-	// create duplicate users when the DB is having transient failures.
-	user, err := uc.userRepo.FindByEmail(ctx, email)
+	validated, err := strategy.Authenticate(ctx, credentials)
 	if err != nil {
-		// Real database error (timeout, connection failure, etc.) — fail fast.
+		return nil, err
+	}
+	if validated == nil || validated.User == nil || validated.User.Email == "" {
+		return nil, errors.New("invalid authentication payload")
+	}
+
+	// Common flow: find/create user in DB.
+	user, err := uc.userRepo.FindByEmail(ctx, validated.User.Email)
+	if err != nil {
 		return nil, err
 	}
 	if user == nil {
-		// First-time sign-in — create a new user record.
-		log.Printf("[Auth] New user signing in: %s — creating record.", email)
+		log.Printf("[Auth] New user signing in: %s — creating record.", validated.User.Email)
 		user = &domain.User{
-			Email:           email,
-			Name:            name,
-			ProfileImageURL: picture,
+			Email:           validated.User.Email,
+			Name:            validated.User.Name,
+			ProfileImageURL: validated.User.ProfileImageURL,
 		}
 		if createErr := uc.userRepo.Create(ctx, user); createErr != nil {
 			return nil, createErr
 		}
 	}
 
-	// Step 3: Generate our own short-lived Access Token and Refresh Token.
 	accessToken, err := uc.tokenSvc.GenerateAccessToken(user)
 	if err != nil {
 		return nil, err
@@ -80,9 +90,74 @@ func (uc *AuthUseCase) GoogleSignIn(ctx context.Context, googleIDToken string) (
 		return nil, err
 	}
 
-	return &AuthResult{
+	return &domain.AuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User:         user,
+		Provider:     validated.Provider,
+	}, nil
+}
+
+// GoogleSignIn validates a Google ID Token, then finds or creates the user in our system.
+// This implements the "find or create" (upsert-like) pattern common in OAuth2 flows.
+func (uc *AuthUseCase) GoogleSignIn(ctx context.Context, googleIDToken string) (*domain.AuthResult, error) {
+	return uc.Login(ctx, "google", domain.AuthCredentials{
+		"id_token": googleIDToken,
+	})
+}
+
+// MockSignIn handles development/guest login without Google validation.
+// SECURITY WARNING: This is for LOCAL DEVELOPMENT ONLY.
+// In production, this endpoint should be disabled or protected by strict IP whitelisting.
+func (uc *AuthUseCase) MockSignIn(ctx context.Context, email, name string) (*domain.AuthResult, error) {
+	return uc.Login(ctx, "guest", domain.AuthCredentials{
+		"email": email,
+		"name":  name,
+	})
+}
+
+// googleDefaultStrategy preserves compatibility when strategies are not injected.
+type googleDefaultStrategy struct {
+	verifier ports.GoogleTokenVerifier
+}
+
+func (s *googleDefaultStrategy) Authenticate(ctx context.Context, credentials domain.AuthCredentials) (*domain.AuthResult, error) {
+	if s.verifier == nil {
+		return nil, errors.New("google verifier is not configured")
+	}
+	idToken := credentials.GetString("id_token")
+	if idToken == "" {
+		return nil, errors.New("id_token is required")
+	}
+
+	email, name, picture, err := s.verifier.Verify(ctx, idToken)
+	if err != nil {
+		return nil, errors.New("invalid Google ID token")
+	}
+
+	return &domain.AuthResult{
+		User:     &domain.User{Email: email, Name: name, ProfileImageURL: picture},
+		Provider: "google",
+	}, nil
+}
+
+// guestDefaultStrategy preserves compatibility when strategies are not injected.
+type guestDefaultStrategy struct{}
+
+func (s *guestDefaultStrategy) Authenticate(ctx context.Context, credentials domain.AuthCredentials) (*domain.AuthResult, error) {
+	_ = ctx
+	email := credentials.GetString("email")
+	name := credentials.GetString("name")
+	if email == "" || name == "" {
+		return nil, errors.New("email and name are required")
+	}
+
+	return &domain.AuthResult{
+		User: &domain.User{
+			Email:           email,
+			Name:            name,
+			ProfileImageURL: "https://via.placeholder.com/150?text=" + name,
+		},
+		Provider: "guest",
 	}, nil
 }

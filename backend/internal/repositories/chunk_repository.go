@@ -62,7 +62,7 @@ func (r *PostgresChunkRepository) SearchSimilar(ctx context.Context, topicID str
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT *, 1 - (embedding <=> ?::vector) AS similarity
 		FROM material_chunks
-		WHERE topic_id = ? AND deleted_at IS NULL
+		WHERE topic_id = ?
 		ORDER BY embedding <=> ?::vector
 		LIMIT ?`,
 		vectorLiteral, topicID, vectorLiteral, topK,

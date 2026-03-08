@@ -19,6 +19,12 @@ vendor/
 .env.*.local
 *.secret
 
+# Local Storage (development only)
+storage/
+
+# Docker PostgreSQL Data (development only)
+postgres_data/
+
 # Google Cloud Service Account credentials — NEVER commit these!
 # These files contain private keys. Treat them like passwords.
 *.json

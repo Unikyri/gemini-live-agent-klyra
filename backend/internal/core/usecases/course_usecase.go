@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -19,6 +20,9 @@ type CourseUseCase struct {
 	storage    ports.StorageService
 	avatarGen  ports.AvatarGenerator
 }
+
+// ErrCourseForbidden is returned when a user tries to access another user's course.
+var ErrCourseForbidden = errors.New("forbidden course access")
 
 // NewCourseUseCase creates a new CourseUseCase with injected dependencies.
 func NewCourseUseCase(
@@ -140,7 +144,7 @@ func (uc *CourseUseCase) GetCourseByID(ctx context.Context, courseID, userID str
 	}
 	// SECURITY: Authorization check — ensure the requester owns this course.
 	if course.UserID.String() != userID {
-		return nil, nil // return nil to trigger 404, not 403 (to avoid resource enumeration)
+		return nil, ErrCourseForbidden
 	}
 	return course, nil
 }

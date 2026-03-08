@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -112,13 +113,15 @@ func (h *CourseHandler) GetCourse(c *gin.Context) {
 	courseID := c.Param("course_id")
 
 	course, err := h.courseUseCase.GetCourseByID(c.Request.Context(), courseID, userID.(string))
+	if errors.Is(err, usecases.ErrCourseForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve course"})
 		return
 	}
 	if course == nil {
-		// Returns 404 whether the course doesn't exist OR doesn't belong to this user.
-		// This prevents resource enumeration attacks (SECURITY: Elevation of Privilege).
 		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
 		return
 	}
@@ -141,8 +144,16 @@ func (h *CourseHandler) AddTopic(c *gin.Context) {
 	}
 
 	topic, err := h.courseUseCase.AddTopic(c.Request.Context(), courseID, userID.(string), body.Title)
-	if err != nil || topic == nil {
+	if errors.Is(err, usecases.ErrCourseForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not add topic"})
+		return
+	}
+	if topic == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
 		return
 	}
 

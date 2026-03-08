@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:klyra/features/course/data/material_remote_datasource.dart';
 import 'package:klyra/features/course/domain/material_models.dart';
@@ -18,7 +18,7 @@ class MaterialController extends _$MaterialController {
     return ds.getMaterials(courseId, topicId);
   }
 
-  Future<void> uploadFile(File file) async {
+  Future<void> uploadFile(PlatformFile file) async {
     // Optimistically stay in loading state while uploading
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {

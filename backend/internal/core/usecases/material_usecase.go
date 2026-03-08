@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -20,6 +21,9 @@ type MaterialUseCase struct {
 	storage      ports.StorageService
 	extractor    ports.TextExtractor
 }
+
+// ErrMaterialForbidden is returned when a user tries to access another user's course materials.
+var ErrMaterialForbidden = errors.New("forbidden material access")
 
 // NewMaterialUseCase creates a new MaterialUseCase with injected dependencies.
 func NewMaterialUseCase(
@@ -57,9 +61,11 @@ func (uc *MaterialUseCase) UploadMaterial(ctx context.Context, input UploadMater
 	if err != nil {
 		return nil, err
 	}
-	if course == nil || course.UserID.String() != input.UserID {
-		// Return nil — caller should map to 404 (anti-enumeration pattern).
+	if course == nil {
 		return nil, nil
+	}
+	if course.UserID.String() != input.UserID {
+		return nil, ErrMaterialForbidden
 	}
 
 	// Step 2: Validate that the topic belongs to the given course.
@@ -112,13 +118,15 @@ func (uc *MaterialUseCase) UploadMaterial(ctx context.Context, input UploadMater
 
 // GetMaterialsByTopic returns all materials for a topic, validating course ownership.
 func (uc *MaterialUseCase) GetMaterialsByTopic(ctx context.Context, courseID, topicID, userID string) ([]domain.Material, error) {
-	// Ownership check — uses the same anti-enumeration nil pattern.
 	course, err := uc.courseRepo.FindByID(ctx, courseID)
 	if err != nil {
 		return nil, err
 	}
-	if course == nil || course.UserID.String() != userID {
+	if course == nil {
 		return nil, nil
+	}
+	if course.UserID.String() != userID {
+		return nil, ErrMaterialForbidden
 	}
 	return uc.materialRepo.FindByTopic(ctx, topicID)
 }

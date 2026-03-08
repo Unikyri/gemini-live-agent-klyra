@@ -1,5 +1,4 @@
-import 'dart:ui';
-import 'package:flutter/material.dart';
+import 'dart:ui';import 'package:flutter/foundation.dart';import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:klyra/features/auth/presentation/auth_controller.dart';
 
@@ -112,37 +111,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                         ),
                         const SizedBox(height: 64),
                         
-                        // Sign In Button
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white.withOpacity(0.1)),
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: authState.isLoading 
-                                    ? null 
-                                    : () => ref.read(authControllerProvider.notifier).signInWithGoogle(),
-                                icon: authState.isLoading 
-                                    ? const SizedBox(
-                                        width: 24, height: 24, 
-                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                                      )
-                                    : const Icon(Icons.login, size: 24),
-                                label: const Text(
-                                  'Continue with Google',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        // Sign In Button (disabled on web - use guest login instead)
+                        Tooltip(
+                          message: kIsWeb ? 'Google Sign-In not available on web. Use "Continue as Guest" instead.' : '',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
                                 ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                child: ElevatedButton.icon(
+                                  onPressed: (authState.isLoading || kIsWeb)
+                                      ? null 
+                                      : () => ref.read(authControllerProvider.notifier).signInWithGoogle(),
+                                  icon: authState.isLoading 
+                                      ? const SizedBox(
+                                          width: 24, height: 24, 
+                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                                        )
+                                      : const Icon(Icons.login, size: 24),
+                                  label: const Text(
+                                    'Continue with Google',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(vertical: 20),
+                                  ),
                                 ),
                               ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Continue as Guest Link
+                        TextButton(
+                          onPressed: authState.isLoading
+                              ? null
+                              : () => ref.read(authControllerProvider.notifier).signInAsGuest(),
+                          child: Text(
+                            'Continue as Guest',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                         ),

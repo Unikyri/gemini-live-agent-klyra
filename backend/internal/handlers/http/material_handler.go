@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -105,6 +106,10 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 		FormatType: formatType,
 		SizeBytes:  int64(len(fileData)),
 	})
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 	if err != nil {
 		log.Printf("[Material] UploadMaterial failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not upload material"})
@@ -131,6 +136,10 @@ func (h *MaterialHandler) ListMaterials(c *gin.Context) {
 	topicID := c.Param("topic_id")
 
 	materials, err := h.materialUseCase.GetMaterialsByTopic(c.Request.Context(), courseID, topicID, userID)
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve materials"})
 		return

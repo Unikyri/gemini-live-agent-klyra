@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/usecases"
 )
 
@@ -22,31 +23,48 @@ func NewAuthHandler(authUseCase *usecases.AuthUseCase) *AuthHandler {
 
 // RegisterRoutes attaches auth routes to the given Gin router group.
 // Optional middlewares (e.g. rate limiters) can be passed as extra arguments.
+//
+// Unified endpoint (Phase 5B+):
+//   - POST /auth/login (Strategy Pattern, supports: google, guest)
 func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup, middlewares ...gin.HandlerFunc) {
-	rg.POST("/auth/google", append(middlewares, h.GoogleSignIn)...)
+	rg.POST("/auth/login", append(middlewares, h.SignIn)...)
 }
 
-// googleSignInRequest is the expected JSON body from the Flutter client.
-type googleSignInRequest struct {
-	IDToken string `json:"id_token" binding:"required"`
+// signInRequest is the unified authentication request payload.
+// Provider selects the strategy; payload fields are provider-specific.
+type signInRequest struct {
+	Provider string `json:"provider" binding:"required"`
+	IDToken  string `json:"id_token,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Name     string `json:"name,omitempty"`
 }
 
-// GoogleSignIn handles POST /api/v1/auth/google
-// Expected body: { "id_token": "<Google ID Token from Flutter>" }
-// Returns: { "access_token": "...", "refresh_token": "...", "user": {...} }
-func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
-	var req googleSignInRequest
+// SignIn handles POST /api/v1/auth/login
+// Example payloads:
+// - {"provider":"google","id_token":"..."}
+// - {"provider":"guest","email":"guest@example.com","name":"Guest User"}
+func (h *AuthHandler) SignIn(c *gin.Context) {
+	var req signInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// Returns 400 if id_token is missing — "required" tag enforces this.
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id_token is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is required"})
 		return
 	}
 
-	result, err := h.authUseCase.GoogleSignIn(c.Request.Context(), req.IDToken)
+	credentials := domain.AuthCredentials{}
+	switch req.Provider {
+	case "google":
+		credentials["id_token"] = req.IDToken
+	case "guest":
+		credentials["email"] = req.Email
+		credentials["name"] = req.Name
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported auth provider"})
+		return
+	}
+
+	result, err := h.authUseCase.Login(c.Request.Context(), req.Provider, credentials)
 	if err != nil {
-		// SECURITY (WARNING fix): log the real error server-side for traceability,
-		// but never expose internal details to the client.
-		log.Printf("[Auth] GoogleSignIn failed: %v", err)
+		log.Printf("[Auth] SignIn failed (provider=%s): %v", req.Provider, err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication failed"})
 		return
 	}
@@ -55,5 +73,6 @@ func (h *AuthHandler) GoogleSignIn(c *gin.Context) {
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
 		"user":          result.User,
+		"provider":      result.Provider,
 	})
 }
