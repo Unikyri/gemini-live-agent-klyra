@@ -1,3 +1,15 @@
+package usecases
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
+)
+
 func TestGetTopicContext_QueryEmpty(t *testing.T) {
 	ctx := context.Background()
 	materialRepo := NewMockMaterialRepository()
