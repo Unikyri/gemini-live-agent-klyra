@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 )
@@ -72,7 +73,6 @@ func CosineSimilarity(a, b []float64) (float64, error) {
 		return 0, nil
 	}
 
-	import "math"
 	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB)), nil
 }
 
