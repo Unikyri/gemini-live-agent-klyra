@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:klyra/core/widgets/avatar_image.dart';
 import 'package:klyra/features/course/presentation/course_controller.dart';
 import 'package:klyra/features/course/domain/course_models.dart';
 import 'package:klyra/features/course/presentation/create_course_modal.dart';
@@ -142,22 +143,23 @@ class _CourseCard extends StatelessWidget {
               // Avatar Header Area
               Container(
                 height: 120,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Colors.black12,
-                  image: course.avatarModelUrl != null && course.avatarStatus == 'ready'
-                      ? DecorationImage(
-                          image: NetworkImage(course.avatarModelUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
                 ),
-                child: course.avatarStatus != 'ready'
+                child: course.avatarStatus == 'ready'
                     ? Center(
+                        child: AvatarImage(
+                          avatarUrl: course.avatarModelUrl,
+                          status: course.avatarStatus,
+                          size: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Center(
                         child: isAnimating
                             ? const CircularProgressIndicator(color: Colors.orangeAccent)
                             : Icon(statusIcon, color: statusColor, size: 40),
-                      )
-                    : null,
+                      ),
               ),
               
               // Details Area

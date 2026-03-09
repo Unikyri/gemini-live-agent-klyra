@@ -1,8 +1,8 @@
 import 'dart:ui';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:klyra/core/widgets/avatar_image.dart';
 import 'package:klyra/features/course/domain/course_models.dart';
 import 'package:klyra/features/course/presentation/course_controller.dart';
 import 'package:klyra/features/course/presentation/material_list_view.dart';
@@ -113,13 +113,11 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
                       bottom: 16,
                       child: FadeTransition(
                         opacity: _fadeAnim,
-                        child: CachedNetworkImage(
-                          imageUrl: course.avatarModelUrl!,
-                          height: 180,
+                        child: AvatarImage(
+                          avatarUrl: course.avatarModelUrl,
+                          status: course.avatarStatus,
+                          size: 180,
                           fit: BoxFit.contain,
-                          errorWidget: (_, __, ___) =>
-                              const Icon(Icons.person_rounded,
-                                  size: 100, color: Colors.white24),
                         ),
                       ),
                     ),

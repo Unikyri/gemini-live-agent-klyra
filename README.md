@@ -64,4 +64,23 @@ We adhere to **GitHub Flow (Simplified Trunk Based Development)** favoring Conti
 3. Start your local database and run the corresponding migrations (defined in `/backend/migrations`).
 4. Set up the mobile app by running `flutter pub get` inside `/mobile`.
 
+### Platform-Specific Configuration
+
+#### Static File URLs for Mobile Development
+When running the backend in local storage mode (`STORAGE_MODE=local`), you can configure the base URL for static files using the `STATIC_BASE_URL` environment variable in `backend/.env`.
+
+**For Android Emulator:**
+```bash
+STATIC_BASE_URL=http://10.0.2.2:8080/static
+```
+Android emulators cannot reach `localhost` from the host machine. Use `10.0.2.2` which maps to the host's `localhost`.
+
+**For Web, iOS, or Desktop:**
+```bash
+STATIC_BASE_URL=http://localhost:8080/static
+```
+Or leave it empty to use the default value automatically.
+
+**Why this matters:** Avatar images and other static assets are served from the backend. The mobile app uses platform-aware URL resolution to ensure images load correctly across all platforms.
+
 _This repository enforces strict security conventions (see Threat Model) and code quality standards._

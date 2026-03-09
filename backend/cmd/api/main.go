@@ -296,8 +296,9 @@ func initStorageService() ports.StorageService {
 	storageMode := strings.ToLower(getEnv("STORAGE_MODE", "gcs"))
 	if storageMode == "local" {
 		storagePath := getEnv("STORAGE_PATH", "./storage")
-		log.Printf("Storage mode: local (%s)", storagePath)
-		return repositories.NewLocalStorageService(storagePath)
+		staticBaseURL := getEnv("STATIC_BASE_URL", "")
+		log.Printf("Storage mode: local (%s, baseURL: %s)", storagePath, staticBaseURL)
+		return repositories.NewLocalStorageService(storagePath, staticBaseURL)
 	}
 
 	log.Printf("Storage mode: gcs")

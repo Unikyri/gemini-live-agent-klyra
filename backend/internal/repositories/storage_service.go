@@ -17,12 +17,17 @@ type LocalStorageService struct {
 }
 
 // NewLocalStorageService creates a stub storage service for local development.
-func NewLocalStorageService(basePath string) *LocalStorageService {
+// baseURL should be platform-specific (e.g., http://10.0.2.2:8080/static for Android emulator).
+// If baseURL is empty, defaults to http://localhost:8080/static.
+func NewLocalStorageService(basePath string, baseURL string) *LocalStorageService {
 	if strings.TrimSpace(basePath) == "" {
 		basePath = "./storage"
 	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "http://localhost:8080/static"
+	}
 	return &LocalStorageService{
-		BaseURL:  "http://localhost:8080/static",
+		BaseURL:  baseURL,
 		BasePath: basePath,
 	}
 }
