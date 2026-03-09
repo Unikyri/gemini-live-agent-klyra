@@ -1,29 +1,29 @@
 package repositories
 
 import (
-	"context"
-	"crypto/rand"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 )
 
 // JWTServiceImpl implements token generation and validation.
 type JWTServiceImpl struct {
-	acccessSecret  string
-	refreshSecret  string
-	accessExpiry   time.Duration
-	refreshExpiry  time.Duration
+	accessSecret  string
+	refreshSecret string
+	accessExpiry  time.Duration
+	refreshExpiry time.Duration
 }
 
 // NewJWTService creates a new JWT service with configured secrets and expiry times.
-func NewJWTService(accessSecret, refreshSecret string, accessExpiry, refreshExpiry time.Duration) *JWTServiceImpl {
+func NewJWTService(accessSecret, refreshSecret string) *JWTServiceImpl {
 	return &JWTServiceImpl{
 		accessSecret:  accessSecret,
 		refreshSecret: refreshSecret,
-		accessExpiry:  accessExpiry,
-		refreshExpiry: refreshExpiry,
+		accessExpiry:  15 * time.Minute,
+		refreshExpiry: 7 * 24 * time.Hour,
 	}
 }
 
@@ -45,7 +45,7 @@ func (s *JWTServiceImpl) GenerateTokens(userID string) (accessToken, refreshToke
 	}
 
 	accessJWT := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessToken, err = accessJWT.SignedString([]byte(s.acccessSecret))
+	accessToken, err = accessJWT.SignedString([]byte(s.accessSecret))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to sign access token: %w", err)
 	}
@@ -68,11 +68,11 @@ func (s *JWTServiceImpl) GenerateTokens(userID string) (accessToken, refreshToke
 	return accessToken, refreshToken, nil
 }
 
-// ValidateAccessToken validates and extracts user ID from access token
-func (s *JWTServiceImpl) ValidateAccessToken(token string) (userID string, err error) {
+// ValidateAccessTokenUserID validates and extracts user ID from access token (legacy helper).
+func (s *JWTServiceImpl) ValidateAccessTokenUserID(token string) (userID string, err error) {
 	claims := &jwtClaims{}
 	_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(s.acccessSecret), nil
+		return []byte(s.accessSecret), nil
 	})
 
 	if err != nil {
@@ -105,4 +105,49 @@ func (s *JWTServiceImpl) RefreshAccessToken(refreshToken string) (newAccessToken
 
 	newAccessToken, _, err = s.GenerateTokens(userID)
 	return newAccessToken, err
+}
+
+// GenerateAccessToken implements ports.TokenService.
+func (s *JWTServiceImpl) GenerateAccessToken(user *domain.User) (string, error) {
+	if user == nil {
+		return "", fmt.Errorf("user is nil")
+	}
+	claims := jwt.MapClaims{
+		"sub":   user.ID.String(),
+		"email": user.Email,
+		"iat":   time.Now().Unix(),
+		"exp":   time.Now().Add(s.accessExpiry).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.accessSecret))
+}
+
+// GenerateRefreshToken implements ports.TokenService.
+func (s *JWTServiceImpl) GenerateRefreshToken(userID string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(s.refreshExpiry).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.refreshSecret))
+}
+
+// ValidateAccessToken implements ports.TokenService.
+func (s *JWTServiceImpl) ValidateAccessToken(tokenString string) (map[string]interface{}, error) {
+	parsed, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.accessSecret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok || !parsed.Valid {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+	out := make(map[string]interface{}, len(claims))
+	for k, v := range claims {
+		out[k] = v
+	}
+	return out, nil
 }

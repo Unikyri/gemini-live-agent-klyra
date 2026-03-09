@@ -10,15 +10,19 @@ class AuthController extends _$AuthController {
   @override
   FutureOr<User?> build() async {
     // Attempt to restore the session from secure storage on app start.
-    // For Sprint 2, we only check if a token exists.
-    // Sprint 3 TODO: call GET /me to restore full User object and validate against server.
+    // For Sprint 2/3: Auto-login as guest to get fresh tokens.
+    // TODO Sprint 4: Implement proper token refresh or validate with GET /me
     final repo = ref.watch(authRepositoryProvider);
     final isLoggedIn = await repo.isLoggedIn();
     if (isLoggedIn) {
-      // Return a sentinel User to signal that the session is valid.
-      // This is enough to redirect to the dashboard via GoRouter guard.
-      // The full User profile will be loaded by the Dashboard screen.
-      return const User(id: 'cached', email: '', name: 'Cached Session');
+      // Auto-login as guest to get fresh tokens (tokens may have expired)
+      try {
+        return await repo.signInAsGuest();
+      } catch (e) {
+        // If auto-login fails, clear session and return null (force manual login)
+        await repo.signOut();
+        return null;
+      }
     }
     return null;
   }

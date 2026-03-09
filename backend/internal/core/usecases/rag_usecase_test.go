@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -151,4 +152,114 @@ func TestChunkText_SmallText(t *testing.T) {
 	if chunks[0] != text {
 		t.Fatalf("expected chunk to equal original text")
 	}
+}
+
+type MockMaterialRepositoryForRAG struct{}
+
+func NewMockMaterialRepository() *MockMaterialRepositoryForRAG {
+	return &MockMaterialRepositoryForRAG{}
+}
+
+func (m *MockMaterialRepositoryForRAG) Create(ctx context.Context, material *domain.Material) error {
+	_ = ctx
+	_ = material
+	return nil
+}
+
+func (m *MockMaterialRepositoryForRAG) FindByID(ctx context.Context, id string) (*domain.Material, error) {
+	_ = ctx
+	_ = id
+	return nil, nil
+}
+
+func (m *MockMaterialRepositoryForRAG) FindByTopic(ctx context.Context, topicID string) ([]domain.Material, error) {
+	_ = ctx
+	_ = topicID
+	return nil, nil
+}
+
+func (m *MockMaterialRepositoryForRAG) UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error {
+	_ = ctx
+	_ = materialID
+	_ = status
+	_ = extractedText
+	return nil
+}
+
+type MockChunkRepository struct {
+	chunksByTopic map[string][]domain.MaterialChunk
+	searchByTopic map[string][]domain.RAGResult
+	getByTopicErr error
+}
+
+func NewMockChunkRepository() *MockChunkRepository {
+	return &MockChunkRepository{
+		chunksByTopic: map[string][]domain.MaterialChunk{},
+		searchByTopic: map[string][]domain.RAGResult{},
+	}
+}
+
+func (m *MockChunkRepository) SaveChunks(ctx context.Context, chunks []domain.MaterialChunk) error {
+	_ = ctx
+	if len(chunks) == 0 {
+		return nil
+	}
+	topicID := chunks[0].TopicID.String()
+	m.chunksByTopic[topicID] = chunks
+	return nil
+}
+
+func (m *MockChunkRepository) SearchSimilar(ctx context.Context, topicID string, queryEmbedding []float32, topK int) ([]domain.RAGResult, error) {
+	_ = ctx
+	_ = queryEmbedding
+	results := m.searchByTopic[topicID]
+	if len(results) == 0 {
+		chunks := m.chunksByTopic[topicID]
+		for _, c := range chunks {
+			results = append(results, domain.RAGResult{Chunk: c, Similarity: 0.9})
+		}
+	}
+	if topK > 0 && len(results) > topK {
+		return results[:topK], nil
+	}
+	return results, nil
+}
+
+func (m *MockChunkRepository) GetChunksByTopic(ctx context.Context, topicID string) ([]domain.MaterialChunk, error) {
+	_ = ctx
+	if m.getByTopicErr != nil {
+		return nil, m.getByTopicErr
+	}
+	return m.chunksByTopic[topicID], nil
+}
+
+type MockEmbedder struct {
+	returnErr error
+}
+
+func NewMockEmbedder() *MockEmbedder {
+	return &MockEmbedder{}
+}
+
+func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	_ = ctx
+	_ = text
+	if m.returnErr != nil {
+		return nil, m.returnErr
+	}
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+func SeedTopicWithThreeMaterialsFiveChunksEach(topicID uuid.UUID, chunkRepo *MockChunkRepository) {
+	chunks := make([]domain.MaterialChunk, 0, 5)
+	for i := 0; i < 5; i++ {
+		chunks = append(chunks, domain.MaterialChunk{
+			ID:         uuid.New(),
+			MaterialID: uuid.New(),
+			TopicID:    topicID,
+			ChunkIndex: i,
+			Content:    "algebra chunk " + string(rune('A'+i)),
+		})
+	}
+	chunkRepo.chunksByTopic[topicID.String()] = chunks
 }

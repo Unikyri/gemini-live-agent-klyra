@@ -13,8 +13,8 @@ import (
 
 // CourseRepository handles persistence for educational courses.
 type CourseRepository struct {
-	db            *gorm.DB
-	imageService  ImageService
+	db           *gorm.DB
+	imageService ImageService
 }
 
 // NewCourseRepository creates a new course repository instance.
@@ -23,6 +23,62 @@ func NewCourseRepository(db *gorm.DB, imageService ImageService) *CourseReposito
 		db:           db,
 		imageService: imageService,
 	}
+}
+
+// NewPostgresCourseRepository is a compatibility constructor used by main wiring.
+func NewPostgresCourseRepository(db *gorm.DB) *CourseRepository {
+	return NewCourseRepository(db, nil)
+}
+
+// Create implements ports.CourseRepository.
+func (r *CourseRepository) Create(ctx context.Context, course *domain.Course) error {
+	return r.CreateCourse(ctx, course)
+}
+
+// FindByID implements ports.CourseRepository.
+func (r *CourseRepository) FindByID(ctx context.Context, id string) (*domain.Course, error) {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course id: %w", err)
+	}
+	_ = ctx
+	return r.GetCourseByID(parsedID)
+}
+
+// FindAllByUser implements ports.CourseRepository.
+func (r *CourseRepository) FindAllByUser(ctx context.Context, userID string) ([]domain.Course, error) {
+	parsedUserID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %w", err)
+	}
+	courses, err := r.GetCoursesByUser(parsedUserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Course, 0, len(courses))
+	for _, c := range courses {
+		if c != nil {
+			out = append(out, *c)
+		}
+	}
+	_ = ctx
+	return out, nil
+}
+
+// UpdateAvatarStatus implements ports.CourseRepository.
+func (r *CourseRepository) UpdateAvatarStatus(ctx context.Context, courseID, status, avatarURL string) error {
+	updates := map[string]interface{}{
+		"avatar_status": status,
+		"updated_at":    time.Now(),
+	}
+	if avatarURL != "" {
+		updates["avatar_model_url"] = avatarURL
+	}
+	result := r.db.WithContext(ctx).Model(&domain.Course{}).Where("id = ?", courseID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update avatar status: %w", result.Error)
+	}
+	return nil
 }
 
 // CreateCourse persists a new course record with optional thumbnail image.
@@ -62,11 +118,14 @@ func (r *CourseRepository) GetCourseByID(courseID uuid.UUID) (*domain.Course, er
 	return &course, nil
 }
 
-// GetCoursesByUser retrieves all courses owned by a user.
+// GetCoursesByUser retrieves all courses owned by a user with their topics.
 func (r *CourseRepository) GetCoursesByUser(userID uuid.UUID) ([]*domain.Course, error) {
 	var courses []*domain.Course
 	result := r.db.
-		Where("owner_id = ?", userID).
+		Preload("Topics", func(db *gorm.DB) *gorm.DB {
+			return db.Preload("Materials")
+		}).
+		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&courses)
 
@@ -99,7 +158,7 @@ func (r *CourseRepository) DeleteCourse(courseID uuid.UUID) error {
 // CountCoursesByUser returns the number of courses owned by a user.
 func (r *CourseRepository) CountCoursesByUser(userID uuid.UUID) (int64, error) {
 	var count int64
-	result := r.db.Model(&domain.Course{}).Where("owner_id = ?", userID).Count(&count)
+	result := r.db.Model(&domain.Course{}).Where("user_id = ?", userID).Count(&count)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to count courses: %w", result.Error)
 	}

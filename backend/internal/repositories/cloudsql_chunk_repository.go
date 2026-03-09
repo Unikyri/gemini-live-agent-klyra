@@ -28,7 +28,7 @@ type CloudSQLChunkRepository struct {
 // This is typically instantiated from cmd/api/main.go after initiating the CloudSQL DB.
 func NewCloudSQLChunkRepository(db *gorm.DB) *CloudSQLChunkRepository {
 	return &CloudSQLChunkRepository{
-		PostgresChunkRepository: &PostgresChunkRepository{db: db},
+		PostgresChunkRepository: NewPostgresChunkRepository(db),
 	}
 }
 

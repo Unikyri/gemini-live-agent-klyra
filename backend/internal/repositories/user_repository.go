@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -18,6 +19,33 @@ type UserRepository struct {
 // NewUserRepository creates a new user repository instance.
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
+}
+
+// NewPostgresUserRepository is a compatibility constructor used by main wiring.
+func NewPostgresUserRepository(db *gorm.DB) *UserRepository {
+	return NewUserRepository(db)
+}
+
+// Create implements ports.UserRepository.
+func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
+	_ = ctx
+	return r.CreateUser(user)
+}
+
+// FindByEmail implements ports.UserRepository.
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	_ = ctx
+	return r.GetUserByEmail(email)
+}
+
+// FindByID implements ports.UserRepository.
+func (r *UserRepository) FindByID(ctx context.Context, id string) (*domain.User, error) {
+	_ = ctx
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id: %w", err)
+	}
+	return r.GetUserByID(parsedID)
 }
 
 // CreateUser persists a new user from OAuth provider data.

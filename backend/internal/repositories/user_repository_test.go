@@ -19,19 +19,19 @@ func TestGetUserByEmail_NotFound(t *testing.T) {
 }
 
 func TestGetUserByGoogleID_Provider(t *testing.T) {
-	// Test that users can be uniquely identified by their OAuth provider ID
-	googleID := "118234567890123456789"
+	// Test that users can be uniquely identified by their email
 	userID := uuid.New()
+	googleEmail := "test@example.com"
 
-	// Expected: User created with googleID can be retrieved by that ID
+	// Expected: User created with Google OAuth email can be retrieved by email
 	expectedUser := &domain.User{
-		ID:       userID,
-		Email:    "test@example.com",
-		GoogleID: googleID,
+		ID:    userID,
+		Email: googleEmail,
+		Name:  "Test User",
 	}
 
 	_ = expectedUser
-	assert.NotNil(t, expectedUser.GoogleID, "User should have GoogleID set")
+	assert.NotNil(t, expectedUser.Email, "User should have Email set")
 }
 
 func TestCountUsers_Empty(t *testing.T) {

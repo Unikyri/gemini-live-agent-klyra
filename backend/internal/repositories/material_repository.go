@@ -14,7 +14,7 @@ import (
 
 // MaterialRepository handles persistence for educational materials and their metadata.
 type MaterialRepository struct {
-	db           *gorm.DB
+	db             *gorm.DB
 	storageService StorageService
 	textExtractor  TextExtractor
 }
@@ -30,6 +30,67 @@ func NewMaterialRepository(
 		storageService: storageService,
 		textExtractor:  textExtractor,
 	}
+}
+
+// NewPostgresMaterialRepository is a compatibility constructor used by main wiring.
+func NewPostgresMaterialRepository(db *gorm.DB) *MaterialRepository {
+	return &MaterialRepository{db: db}
+}
+
+// Create implements ports.MaterialRepository.
+func (r *MaterialRepository) Create(ctx context.Context, material *domain.Material) error {
+	result := r.db.WithContext(ctx).Create(material)
+	if result.Error != nil {
+		return fmt.Errorf("failed to create material: %w", result.Error)
+	}
+	return nil
+}
+
+// FindByID implements ports.MaterialRepository.
+func (r *MaterialRepository) FindByID(ctx context.Context, id string) (*domain.Material, error) {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid material id: %w", err)
+	}
+	var material domain.Material
+	result := r.db.WithContext(ctx).Where("id = ?", parsedID).First(&material)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find material: %w", result.Error)
+	}
+	return &material, nil
+}
+
+// FindByTopic implements ports.MaterialRepository.
+func (r *MaterialRepository) FindByTopic(ctx context.Context, topicID string) ([]domain.Material, error) {
+	parsedTopicID, err := uuid.Parse(topicID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid topic id: %w", err)
+	}
+	var materials []domain.Material
+	result := r.db.WithContext(ctx).Where("topic_id = ?", parsedTopicID).Order("created_at DESC").Find(&materials)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to find materials by topic: %w", result.Error)
+	}
+	return materials, nil
+}
+
+// UpdateStatus implements ports.MaterialRepository.
+func (r *MaterialRepository) UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error {
+	updates := map[string]interface{}{
+		"status":     status,
+		"updated_at": time.Now(),
+	}
+	if extractedText != "" {
+		updates["extracted_text"] = extractedText
+	}
+	result := r.db.WithContext(ctx).Model(&domain.Material{}).Where("id = ?", materialID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update material status: %w", result.Error)
+	}
+	return nil
 }
 
 // CreateMaterial persists a new material record and its content (PDF/text).
@@ -53,7 +114,7 @@ func (r *MaterialRepository) CreateMaterial(ctx context.Context, material *domai
 		if err != nil {
 			return fmt.Errorf("failed to extract text: %w", err)
 		}
-		material.Content = textContent
+		material.ExtractedText = textContent
 
 		// Upload file to storage
 		storageURL, err := r.storageService.UploadFile(ctx, material.ID, file, fileHeader.Filename)

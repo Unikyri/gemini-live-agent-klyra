@@ -10,14 +10,25 @@ class EnvInfo {
       return 'http://localhost:8080/api/v1';
     }
 
-    // Mobile / Desktop
+    // Mobile / Desktop - detect platform
     try {
       if (io.Platform.isAndroid) {
-        return 'http://10.0.2.2:8080/api/v1';
+        final url = 'http://10.0.2.2:8080/api/v1';
+        debugPrint('[EnvInfo] Android detected - using 10.0.2.2: $url');
+        return url;
+      } else if (io.Platform.isIOS) {
+        final url = 'http://localhost:8080/api/v1';
+        debugPrint('[EnvInfo] iOS detected - using localhost: $url');
+        return url;
+      } else {
+        final url = 'http://localhost:8080/api/v1';
+        debugPrint('[EnvInfo] Desktop platform detected - using localhost: $url');
+        return url;
       }
     } catch (e) {
       // If Platform access fails, fallback to localhost
+      debugPrint('[EnvInfo] Platform detection failed: $e - falling back to localhost');
+      return 'http://localhost:8080/api/v1';
     }
-    return 'http://localhost:8080/api/v1';
   }
 }

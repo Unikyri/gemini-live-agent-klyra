@@ -4,15 +4,38 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
+
+	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 )
 
 // TextExtractorImpl extracts text from various file formats.
 type TextExtractorImpl struct{}
 
+// PlainTextExtractor is the ports-compatible extractor used by use cases.
+type PlainTextExtractor struct{}
+
 // NewTextExtractor creates a new text extractor instance.
 func NewTextExtractor() *TextExtractorImpl {
 	return &TextExtractorImpl{}
+}
+
+// NewPlainTextExtractor creates the extractor implementation expected by use cases.
+func NewPlainTextExtractor() *PlainTextExtractor {
+	return &PlainTextExtractor{}
+}
+
+// Extract implements ports.TextExtractor.
+func (t *PlainTextExtractor) Extract(ctx context.Context, data []byte, formatType domain.MaterialFormatType) (string, error) {
+	_ = ctx
+	switch formatType {
+	case domain.MaterialFormatTXT, domain.MaterialFormatMD:
+		return string(data), nil
+	case domain.MaterialFormatPDF, domain.MaterialFormatAudio:
+		// Placeholder for future parser/transcriber integration.
+		return "", nil
+	default:
+		return "", fmt.Errorf("unsupported material format: %s", formatType)
+	}
 }
 
 // ExtractText extracts text from files based on content type.

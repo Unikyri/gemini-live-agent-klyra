@@ -78,5 +78,9 @@ func CosineSimilarity(a, b []float64) (float64, error) {
 
 // PgVectorFromEmbedding converts a float64 slice to pgvector domain type
 func PgVectorFromEmbedding(embedding []float64) domain.PgVector {
-	return domain.PgVector(embedding)
+	vector := make([]float32, len(embedding))
+	for i, v := range embedding {
+		vector[i] = float32(v)
+	}
+	return domain.PgVector(vector)
 }

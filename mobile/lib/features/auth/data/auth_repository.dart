@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -34,9 +35,12 @@ class AuthRepository {
 
   /// Guest login (development/testing only) - no backend validation
   Future<User> signInAsGuest({String email = 'guest@example.com', String name = 'Guest User'}) async {
+    debugPrint('[Auth] Starting guest login for $email');
     final AuthResult result = await _remoteDataSource.signInAsGuest(email: email, name: name);
+    debugPrint('[Auth] Guest login successful - access_token: ${result.accessToken.substring(0, 20)}...');
     await _secureStorage.write(key: StorageKeys.accessToken, value: result.accessToken);
     await _secureStorage.write(key: StorageKeys.refreshToken, value: result.refreshToken);
+    debugPrint('[Auth] ✓ Tokens saved to secure storage');
     return result.user;
   }
 

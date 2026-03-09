@@ -1,5 +1,6 @@
 import 'dart:ui';import 'package:flutter/foundation.dart';import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:klyra/core/config/env.dart';
 import 'package:klyra/features/auth/presentation/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -164,6 +165,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                             ),
                           ),
                         ),
+                        
+                        // Debug URL display (development only)
+                        if (!kIsWeb) ...[
+                          const SizedBox(height: 32),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.2),
+                              border: Border.all(color: Colors.orange, width: 1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Backend URL:',
+                                  style: theme.textTheme.labelSmall?.copyWith(color: Colors.orange),
+                                ),
+                                const SizedBox(height: 4),
+                                SelectableText(
+                                  EnvInfo.backendBaseUrl,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontFamily: 'monospace',
+                                    color: Colors.orange[200],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -191,3 +222,4 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     );
   }
 }
+

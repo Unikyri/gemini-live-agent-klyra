@@ -40,4 +40,7 @@ type Topic struct {
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	DeletedAt           *time.Time `json:"deleted_at,omitempty" gorm:"index"`
+
+	// Materials is the one-to-many relation used by GORM preload in course queries.
+	Materials []Material `json:"materials,omitempty" gorm:"foreignKey:TopicID"`
 }

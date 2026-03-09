@@ -51,8 +51,9 @@ type JWTService interface {
 	RefreshAccessToken(refreshToken string) (newAccessToken string, err error)
 }
 
-// GoogleVerifier abstracts Google OAuth token verification (Vertex AI Auth, OAuth library).
-type GoogleVerifier interface {
+// GoogleIDVerifier abstracts Google OAuth token verification (legacy local contract).
+// Kept with a distinct name to avoid clashing with the concrete GoogleVerifier type.
+type GoogleIDVerifier interface {
 	// VerifyIDToken validates a Google OAuth ID token and extracts user info.
 	VerifyIDToken(ctx context.Context, idToken string) (googleID, email, name string, err error)
 }

@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -18,6 +19,37 @@ type TopicRepository struct {
 // NewTopicRepository creates a new topic repository instance.
 func NewTopicRepository(db *gorm.DB) *TopicRepository {
 	return &TopicRepository{db: db}
+}
+
+// NewPostgresTopicRepository is a compatibility constructor used by main wiring.
+func NewPostgresTopicRepository(db *gorm.DB) *TopicRepository {
+	return NewTopicRepository(db)
+}
+
+// Create implements ports.TopicRepository.
+func (r *TopicRepository) Create(ctx context.Context, topic *domain.Topic) error {
+	_ = ctx
+	return r.CreateTopic(topic)
+}
+
+// FindByCourse implements ports.TopicRepository.
+func (r *TopicRepository) FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	parsedCourseID, err := uuid.Parse(courseID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course id: %w", err)
+	}
+	topics, err := r.GetTopicsByCourse(parsedCourseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Topic, 0, len(topics))
+	for _, t := range topics {
+		if t != nil {
+			out = append(out, *t)
+		}
+	}
+	_ = ctx
+	return out, nil
 }
 
 // CreateTopic persists a new topic under a course.

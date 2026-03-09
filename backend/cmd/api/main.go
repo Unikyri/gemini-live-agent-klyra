@@ -24,8 +24,18 @@ func main() {
 	// Load environment variables from .env file in local development.
 	// In production (Cloud Run), these are set via Secret Manager or env config.
 	// Overload environment variables to prioritize .env over system variables
-	if err := godotenv.Overload(); err != nil {
-		log.Println("No .env file found, reading environment variables from system")
+	// Try loading from multiple locations: current dir, backend dir, parent dir
+	envPaths := []string{".env", "backend/.env", "../backend/.env"}
+	envLoaded := false
+	for _, path := range envPaths {
+		if err := godotenv.Overload(path); err == nil {
+			log.Printf("✓ Loaded environment from: %s", path)
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		log.Println("⚠ No .env file found, reading environment variables from system")
 	}
 
 	// --- Database connection (DB_MODE: local|cloud) ---
