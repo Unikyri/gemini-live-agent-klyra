@@ -48,8 +48,10 @@ class TutorSessionState {
 class TutorSessionController extends _$TutorSessionController {
   // SECURITY: API key must come from environment, never hardcoded in code.
   // For production: use --dart-define=GEMINI_API_KEY=... at build time.
-  static const String _geminiApiKey =
-      String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+  static const String _geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
 
   late GeminiLiveService _geminiService;
   final AudioRecorder _recorder = AudioRecorder();
@@ -75,7 +77,8 @@ class TutorSessionController extends _$TutorSessionController {
     if (_geminiApiKey.isEmpty) {
       state = state.copyWith(
         sessionState: SessionState.error,
-        error: 'Gemini API key not configured. Run with --dart-define=GEMINI_API_KEY=...',
+        error:
+            'Gemini API key not configured. Run with --dart-define=GEMINI_API_KEY=...',
       );
       return;
     }
@@ -84,6 +87,22 @@ class TutorSessionController extends _$TutorSessionController {
     try {
       // Step 1: Fetch RAG context from our Go backend
       final dio = ref.read(dioClientProvider);
+
+      final readinessResponse = await dio.get(
+        '/courses/$courseId/topics/$topicId/readiness',
+      );
+      final isReady = (readinessResponse.data['is_ready'] as bool?) ?? false;
+      if (!isReady) {
+        final message =
+            (readinessResponse.data['message'] as String?) ??
+            'Upload and validate at least one material before tutoring.';
+        state = state.copyWith(
+          sessionState: SessionState.error,
+          error: message,
+        );
+        return;
+      }
+
       final context = await _fetchContext(dio, courseId, topicId);
 
       // Step 2: Subscribe to the GeminiLiveService streams
@@ -135,7 +154,9 @@ class TutorSessionController extends _$TutorSessionController {
       );
       return (response.data['context'] as String?) ?? '';
     } catch (e) {
-      debugPrint('[TutorSession] Could not fetch context: $e. Proceeding without RAG context.');
+      debugPrint(
+        '[TutorSession] Could not fetch context: $e. Proceeding without RAG context.',
+      );
       // Non-fatal: proceed with empty context — the Tutor still works without RAG
       return '';
     }

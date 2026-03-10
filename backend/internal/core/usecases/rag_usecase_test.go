@@ -178,6 +178,24 @@ func (m *MockMaterialRepositoryForRAG) FindByTopic(ctx context.Context, topicID 
 	return nil, nil
 }
 
+func (m *MockMaterialRepositoryForRAG) FindValidatedByTopic(ctx context.Context, topicID string) ([]domain.Material, error) {
+	_ = ctx
+	_ = topicID
+	return nil, nil
+}
+
+func (m *MockMaterialRepositoryForRAG) CountByTopic(ctx context.Context, topicID string) (int, error) {
+	_ = ctx
+	_ = topicID
+	return 0, nil
+}
+
+func (m *MockMaterialRepositoryForRAG) CountReadyByTopic(ctx context.Context, topicID string) (int, error) {
+	_ = ctx
+	_ = topicID
+	return 0, nil
+}
+
 func (m *MockMaterialRepositoryForRAG) UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error {
 	_ = ctx
 	_ = materialID

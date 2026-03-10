@@ -13,6 +13,10 @@ const (
 	MaterialFormatPDF   MaterialFormatType = "pdf"
 	MaterialFormatTXT   MaterialFormatType = "txt"
 	MaterialFormatMD    MaterialFormatType = "md"
+	MaterialFormatPNG   MaterialFormatType = "png"
+	MaterialFormatJPG   MaterialFormatType = "jpg"
+	MaterialFormatJPEG  MaterialFormatType = "jpeg"
+	MaterialFormatWEBP  MaterialFormatType = "webp"
 	MaterialFormatAudio MaterialFormatType = "audio"
 )
 

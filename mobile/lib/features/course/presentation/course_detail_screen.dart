@@ -18,10 +18,14 @@ class CourseDetailScreen extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return coursesAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(
         body: Center(
-          child: Text('Could not load course.', style: theme.textTheme.bodyLarge),
+          child: Text(
+            'Could not load course.',
+            style: theme.textTheme.bodyLarge,
+          ),
         ),
       ),
       data: (courses) {
@@ -55,8 +59,10 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
   @override
   void initState() {
     super.initState();
-    _fadeController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
     _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
     _fadeController.forward();
   }
@@ -129,10 +135,7 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
                     child: ClipRect(
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 0, sigmaY: 4),
-                        child: Container(
-                          height: 60,
-                          color: Colors.transparent,
-                        ),
+                        child: Container(height: 60, color: Colors.transparent),
                       ),
                     ),
                   ),
@@ -143,25 +146,17 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
 
           // --- Topics & Materials ---
           course.topics.isEmpty
-              ? SliverFillRemaining(
-                  child: _buildEmptyTopics(theme, course),
-                )
+              ? SliverFillRemaining(child: _buildEmptyTopics(theme, course))
               : SliverPadding(
                   padding: const EdgeInsets.all(24),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final topic = course.topics[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 32),
-                          child: _TopicSection(
-                            courseId: course.id,
-                            topic: topic,
-                          ),
-                        );
-                      },
-                      childCount: course.topics.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final topic = course.topics[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 32),
+                        child: _TopicSection(courseId: course.id, topic: topic),
+                      );
+                    }, childCount: course.topics.length),
                   ),
                 ),
         ],
@@ -179,15 +174,17 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.topic_outlined,
-              size: 80, color: Colors.white.withOpacity(0.15)),
+          Icon(
+            Icons.topic_outlined,
+            size: 80,
+            color: Colors.white.withOpacity(0.15),
+          ),
           const SizedBox(height: 16),
           Text('No topics yet.', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             'Topics organize your learning material.\nTap + to add a topic.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: Colors.white38),
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white38),
             textAlign: TextAlign.center,
           ),
         ],
@@ -204,22 +201,27 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'e.g. Chapter 1 — Newton\'s Laws'),
+          decoration: const InputDecoration(
+            hintText: 'e.g. Chapter 1 — Newton\'s Laws',
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final title = controller.text.trim();
               if (title.isEmpty) return;
               Navigator.pop(ctx);
-              
+
               try {
                 // Call the addTopic action from CourseController
-                await ref.read(courseControllerProvider.notifier).addTopic(course.id, title);
-                
+                await ref
+                    .read(courseControllerProvider.notifier)
+                    .addTopic(course.id, title);
+
                 if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
@@ -277,9 +279,10 @@ class _TopicSection extends StatelessWidget {
             const SizedBox(height: 16),
             // Start Tutor Session button — navigates to TutorSessionScreen
             OutlinedButton.icon(
-              onPressed: () => context.push('/tutor/$courseId/${topic.id}'),
+              onPressed: () =>
+                  context.push('/course/$courseId/topic/${topic.id}/summary'),
               icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: const Text('Start Tutor Session'),
+              label: const Text('Review Summary & Start'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: theme.colorScheme.primary,
                 side: BorderSide(

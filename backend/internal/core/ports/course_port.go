@@ -20,7 +20,10 @@ type CourseRepository interface {
 // TopicRepository defines persistence operations for Topics.
 type TopicRepository interface {
 	Create(ctx context.Context, topic *domain.Topic) error
+	FindByID(ctx context.Context, topicID string) (*domain.Topic, error)
 	FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error)
+	GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error)
+	UpsertSummaryCache(ctx context.Context, cache domain.TopicSummaryCache) error
 }
 
 // StorageService defines the contract for file storage (Cloud Storage).

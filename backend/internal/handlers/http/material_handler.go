@@ -14,22 +14,39 @@ import (
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/usecases"
 )
 
-// maxMaterialSize limits material uploads to 20 MB.
-// PDFs and audio files are typically larger than images, so we allow double the image limit.
-const maxMaterialSize = 20 << 20 // 20 MB
+// Size limits per format to keep uploads bounded while allowing lecture audio.
+const (
+	maxDefaultMaterialSize = 20 << 20 // 20 MB
+	maxAudioMaterialSize   = 50 << 20 // 50 MB
+)
 
 // allowedMaterialFormats maps MIME types detected from magic bytes to MaterialFormatType.
 var allowedMaterialFormats = map[string]domain.MaterialFormatType{
 	"application/pdf": domain.MaterialFormatPDF,
 	"text/plain":      domain.MaterialFormatTXT,
+	"image/png":       domain.MaterialFormatPNG,
+	"image/jpeg":      domain.MaterialFormatJPEG,
+	"image/webp":      domain.MaterialFormatWEBP,
+	"audio/mpeg":      domain.MaterialFormatAudio,
+	"audio/wav":       domain.MaterialFormatAudio,
+	"audio/x-wav":     domain.MaterialFormatAudio,
+	"audio/mp4":       domain.MaterialFormatAudio,
+	"audio/x-m4a":     domain.MaterialFormatAudio,
 }
 
 // allowedExtensions maps file extensions to MaterialFormatType for text/plain disambiguation.
 // http.DetectContentType returns "text/plain" for both .txt and .md files.
 var allowedExtensions = map[string]domain.MaterialFormatType{
-	".pdf": domain.MaterialFormatPDF,
-	".txt": domain.MaterialFormatTXT,
-	".md":  domain.MaterialFormatMD,
+	".pdf":  domain.MaterialFormatPDF,
+	".txt":  domain.MaterialFormatTXT,
+	".md":   domain.MaterialFormatMD,
+	".png":  domain.MaterialFormatPNG,
+	".jpg":  domain.MaterialFormatJPG,
+	".jpeg": domain.MaterialFormatJPEG,
+	".webp": domain.MaterialFormatWEBP,
+	".mp3":  domain.MaterialFormatAudio,
+	".wav":  domain.MaterialFormatAudio,
+	".m4a":  domain.MaterialFormatAudio,
 }
 
 // MaterialHandler handles HTTP requests for the Material Upload module.
@@ -69,32 +86,46 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// SECURITY: enforce the 20 MB limit before reading all bytes into memory.
-	limitedReader := io.LimitReader(file, maxMaterialSize+1)
+	// SECURITY: read with the maximum cap first, then enforce format-specific limit.
+	limitedReader := io.LimitReader(file, maxAudioMaterialSize+1)
 	fileData, err := io.ReadAll(limitedReader)
 	if err != nil {
 		log.Printf("[Material] Failed to read uploaded file: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not read uploaded file"})
 		return
 	}
-	if int64(len(fileData)) > maxMaterialSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds 20 MB limit"})
-		return
-	}
-
 	// SECURITY: determine format from both extension AND magic bytes.
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	formatType, extOK := allowedExtensions[ext]
 	if !extOK {
-		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only PDF, TXT and MD files are accepted"})
+		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only PDF, TXT, MD, PNG, JPG, JPEG, WEBP, MP3, WAV and M4A files are accepted"})
 		return
 	}
 
-	// For text/plain files, confirm via magic bytes that it is actually text.
+	sizeLimit := maxDefaultMaterialSize
+	if formatType == domain.MaterialFormatAudio {
+		sizeLimit = maxAudioMaterialSize
+	}
+	if int64(len(fileData)) > int64(sizeLimit) {
+		if formatType == domain.MaterialFormatAudio {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "audio file exceeds 50 MB limit"})
+			return
+		}
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds 20 MB limit"})
+		return
+	}
+
+	// Validate MIME and extension compatibility.
 	detectedMIME := http.DetectContentType(fileData)
 	if formatType == domain.MaterialFormatPDF && detectedMIME != "application/pdf" {
 		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "file content does not match the .pdf extension"})
 		return
+	}
+	if formatType != domain.MaterialFormatMD {
+		if _, ok := allowedMaterialFormats[detectedMIME]; !ok {
+			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "unsupported file MIME type"})
+			return
+		}
 	}
 
 	material, err := h.materialUseCase.UploadMaterial(c.Request.Context(), usecases.UploadMaterialInput{

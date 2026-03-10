@@ -77,6 +77,63 @@ func (r *MaterialRepository) FindByTopic(ctx context.Context, topicID string) ([
 	return materials, nil
 }
 
+// FindValidatedByTopic implements ports.MaterialRepository.
+func (r *MaterialRepository) FindValidatedByTopic(ctx context.Context, topicID string) ([]domain.Material, error) {
+	parsedTopicID, err := uuid.Parse(topicID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid topic id: %w", err)
+	}
+
+	var materials []domain.Material
+	result := r.db.WithContext(ctx).
+		Where("topic_id = ? AND status = ? AND extracted_text <> ''", parsedTopicID, domain.MaterialStatusValidated).
+		Order("updated_at DESC").
+		Find(&materials)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to find validated materials by topic: %w", result.Error)
+	}
+
+	return materials, nil
+}
+
+// CountByTopic implements ports.MaterialRepository.
+func (r *MaterialRepository) CountByTopic(ctx context.Context, topicID string) (int, error) {
+	parsedTopicID, err := uuid.Parse(topicID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid topic id: %w", err)
+	}
+
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&domain.Material{}).
+		Where("topic_id = ?", parsedTopicID).
+		Count(&count)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to count materials by topic: %w", result.Error)
+	}
+
+	return int(count), nil
+}
+
+// CountReadyByTopic implements ports.MaterialRepository.
+func (r *MaterialRepository) CountReadyByTopic(ctx context.Context, topicID string) (int, error) {
+	parsedTopicID, err := uuid.Parse(topicID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid topic id: %w", err)
+	}
+
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&domain.Material{}).
+		Where("topic_id = ? AND status = ? AND extracted_text <> ''", parsedTopicID, domain.MaterialStatusValidated).
+		Count(&count)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to count ready materials by topic: %w", result.Error)
+	}
+
+	return int(count), nil
+}
+
 // UpdateStatus implements ports.MaterialRepository.
 func (r *MaterialRepository) UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error {
 	updates := map[string]interface{}{

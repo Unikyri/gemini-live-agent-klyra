@@ -131,6 +131,13 @@ func (m *MockTopicRepository) Create(ctx context.Context, topic *domain.Topic) e
 	return nil
 }
 
+func (m *MockTopicRepository) FindByID(ctx context.Context, topicID string) (*domain.Topic, error) {
+	if t, ok := m.topics[topicID]; ok {
+		return t, nil
+	}
+	return nil, nil
+}
+
 func (m *MockTopicRepository) FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error) {
 	var topics []domain.Topic
 	for _, t := range m.topics {
@@ -139,6 +146,18 @@ func (m *MockTopicRepository) FindByCourse(ctx context.Context, courseID string)
 		}
 	}
 	return topics, nil
+}
+
+func (m *MockTopicRepository) GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error) {
+	_ = ctx
+	_ = topicID
+	return nil, nil
+}
+
+func (m *MockTopicRepository) UpsertSummaryCache(ctx context.Context, cache domain.TopicSummaryCache) error {
+	_ = ctx
+	_ = cache
+	return nil
 }
 
 // --- Course Use Case Tests ---

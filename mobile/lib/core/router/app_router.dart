@@ -5,6 +5,7 @@ import 'package:klyra/features/auth/presentation/auth_controller.dart';
 import 'package:klyra/features/auth/presentation/login_screen.dart';
 import 'package:klyra/features/course/presentation/course_dashboard_screen.dart';
 import 'package:klyra/features/course/presentation/course_detail_screen.dart';
+import 'package:klyra/features/course/presentation/screens/material_summary_screen.dart';
 import 'package:klyra/features/tutor/presentation/tutor_session_screen.dart';
 
 part 'app_router.g.dart';
@@ -25,10 +26,7 @@ GoRouter appRouter(Ref ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/home',
         builder: (context, state) => const CourseDashboardScreen(),
@@ -46,6 +44,14 @@ GoRouter appRouter(Ref ref) {
           final courseId = state.pathParameters['courseId']!;
           final topicId = state.pathParameters['topicId']!;
           return TutorSessionScreen(courseId: courseId, topicId: topicId);
+        },
+      ),
+      GoRoute(
+        path: '/course/:courseId/topic/:topicId/summary',
+        builder: (context, state) {
+          final courseId = state.pathParameters['courseId']!;
+          final topicId = state.pathParameters['topicId']!;
+          return MaterialSummaryScreen(courseId: courseId, topicId: topicId);
         },
       ),
     ],

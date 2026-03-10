@@ -37,10 +37,23 @@ type Topic struct {
 	OrderIndex int       `json:"order_index" gorm:"default:0"` // for sequencing
 	// ConsolidatedContext stores the validated, processed content of all materials.
 	ConsolidatedContext string     `json:"consolidated_context,omitempty"`
+	SummaryMarkdown     string     `json:"summary_markdown,omitempty"`
+	SummarySourceHash   string     `json:"summary_source_hash,omitempty" gorm:"index"`
+	SummaryMaterialIDs  string     `json:"summary_material_ids,omitempty"`
+	SummaryUpdatedAt    *time.Time `json:"summary_updated_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	DeletedAt           *time.Time `json:"deleted_at,omitempty" gorm:"index"`
 
 	// Materials is the one-to-many relation used by GORM preload in course queries.
 	Materials []Material `json:"materials,omitempty" gorm:"foreignKey:TopicID"`
+}
+
+// TopicSummaryCache represents the persisted summary state for a topic.
+type TopicSummaryCache struct {
+	TopicID            uuid.UUID
+	SummaryMarkdown    string
+	SummarySourceHash  string
+	SummaryMaterialIDs []string
+	SummaryUpdatedAt   *time.Time
 }

@@ -20,6 +20,7 @@ type MaterialUseCase struct {
 	courseRepo   ports.CourseRepository
 	storage      ports.StorageService
 	extractor    ports.TextExtractor
+	ragUseCase   *RAGUseCase
 }
 
 // ErrMaterialForbidden is returned when a user tries to access another user's course materials.
@@ -32,6 +33,7 @@ func NewMaterialUseCase(
 	courseRepo ports.CourseRepository,
 	storage ports.StorageService,
 	extractor ports.TextExtractor,
+	ragUseCase *RAGUseCase,
 ) *MaterialUseCase {
 	return &MaterialUseCase{
 		materialRepo: materialRepo,
@@ -39,6 +41,7 @@ func NewMaterialUseCase(
 		courseRepo:   courseRepo,
 		storage:      storage,
 		extractor:    extractor,
+		ragUseCase:   ragUseCase,
 	}
 }
 
@@ -143,11 +146,22 @@ func (uc *MaterialUseCase) extractTextAsync(materialID string, data []byte, form
 	text, err := uc.extractor.Extract(ctx, data, format)
 	if err != nil {
 		log.Printf("[Material] Extraction failed for material %s: %v", materialID, err)
-		_ = uc.materialRepo.UpdateStatus(ctx, materialID, domain.MaterialStatusRejected, "")
+		_ = uc.materialRepo.UpdateStatus(ctx, materialID, domain.MaterialStatusRejected, "[rejected] extraction failed")
+		return
+	}
+
+	if text == "" {
+		log.Printf("[Material] Extraction produced empty content for material %s", materialID)
+		_ = uc.materialRepo.UpdateStatus(ctx, materialID, domain.MaterialStatusRejected, "[rejected] empty extracted content")
 		return
 	}
 
 	_ = uc.materialRepo.UpdateStatus(ctx, materialID, domain.MaterialStatusValidated, text)
+	if uc.ragUseCase != nil {
+		if err := uc.ragUseCase.ProcessMaterialChunks(ctx, materialID); err != nil {
+			log.Printf("[Material] RAG chunking failed for material %s: %v", materialID, err)
+		}
+	}
 	log.Printf("[Material] Extraction complete for material %s — %d chars extracted", materialID, len(text))
 }
 
@@ -158,6 +172,12 @@ func mimeForFormat(f domain.MaterialFormatType) string {
 		return "application/pdf"
 	case domain.MaterialFormatMD:
 		return "text/markdown"
+	case domain.MaterialFormatPNG:
+		return "image/png"
+	case domain.MaterialFormatJPG, domain.MaterialFormatJPEG:
+		return "image/jpeg"
+	case domain.MaterialFormatWEBP:
+		return "image/webp"
 	case domain.MaterialFormatAudio:
 		return "audio/mpeg"
 	default:

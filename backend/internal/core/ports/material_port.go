@@ -15,6 +15,12 @@ type MaterialRepository interface {
 	FindByID(ctx context.Context, id string) (*domain.Material, error)
 	// FindByTopic retrieves all non-deleted materials for a specific topic.
 	FindByTopic(ctx context.Context, topicID string) ([]domain.Material, error)
+	// FindValidatedByTopic retrieves validated materials with extracted text.
+	FindValidatedByTopic(ctx context.Context, topicID string) ([]domain.Material, error)
+	// CountByTopic returns total materials linked to a topic.
+	CountByTopic(ctx context.Context, topicID string) (int, error)
+	// CountReadyByTopic returns validated materials with non-empty extracted text.
+	CountReadyByTopic(ctx context.Context, topicID string) (int, error)
 	// UpdateStatus updates the processing status and optionally the extracted text.
 	UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error
 }
@@ -26,4 +32,8 @@ type TextExtractor interface {
 	// formatType specifies the file format (txt, md, pdf).
 	// Returns an empty string if extraction is not supported for the format.
 	Extract(ctx context.Context, data []byte, formatType domain.MaterialFormatType) (string, error)
+	// ExtractFromImage runs OCR over image bytes and returns text with confidence.
+	ExtractFromImage(ctx context.Context, imageData []byte) (text string, confidence float64, err error)
+	// ExtractFromAudio runs speech-to-text over audio bytes.
+	ExtractFromAudio(ctx context.Context, audioData []byte, mimeType string) (transcript string, err error)
 }

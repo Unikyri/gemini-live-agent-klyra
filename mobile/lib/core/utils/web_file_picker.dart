@@ -66,24 +66,30 @@ class WebFilePicker {
 
   /// Pick an image file (common use case)
   static Future<PickedFileResult?> pickImage() async {
-    return pickFile(
-      type: FileType.image,
-    );
+    return pickFile(type: FileType.image);
   }
 
   /// Pick a PDF file
   static Future<PickedFileResult?> pickPDF() async {
-    return pickFile(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
+    return pickFile(type: FileType.custom, allowedExtensions: ['pdf']);
   }
 
-  /// Pick a document file (PDF, TXT, MD)
-  static Future<PickedFileResult?> pickDocument() async {
+  /// Pick a material file (documents, images, or audio).
+  static Future<PickedFileResult?> pickMaterial() async {
     return pickFile(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'txt', 'md'],
+      allowedExtensions: [
+        'pdf',
+        'txt',
+        'md',
+        'png',
+        'jpg',
+        'jpeg',
+        'webp',
+        'mp3',
+        'wav',
+        'm4a',
+      ],
     );
   }
 }
@@ -118,12 +124,7 @@ class PickedFileResult {
 
   /// Converts to file_picker PlatformFile for shared upload pipelines.
   PlatformFile toPlatformFile() {
-    return PlatformFile(
-      name: name,
-      size: size,
-      bytes: bytes,
-      path: path,
-    );
+    return PlatformFile(name: name, size: size, bytes: bytes, path: path);
   }
 }
 

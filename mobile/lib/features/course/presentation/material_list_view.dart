@@ -18,17 +18,30 @@ class MaterialListView extends ConsumerWidget {
   });
 
   Future<void> _pickAndUpload(BuildContext context, WidgetRef ref) async {
-    final picked = await WebFilePicker.pickDocument();
+    final picked = await WebFilePicker.pickMaterial();
     if (picked == null) return;
 
     // SECURITY: allow only expected extensions at client side.
-    const allowedExtensions = {'pdf', 'txt', 'md'};
+    const allowedExtensions = {
+      'pdf',
+      'txt',
+      'md',
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'mp3',
+      'wav',
+      'm4a',
+    };
     final extension = (picked.extension ?? '').toLowerCase();
     if (!allowedExtensions.contains(extension)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Only PDF, TXT or MD files are allowed.'),
+            content: Text(
+              'Only PDF/TXT/MD, images (PNG/JPG/WEBP), or audio (MP3/WAV/M4A) are allowed.',
+            ),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -38,17 +51,24 @@ class MaterialListView extends ConsumerWidget {
 
     final platformFile = picked.toPlatformFile();
     await ref
-        .read(materialControllerProvider(
-            courseId: courseId, topicId: topicId).notifier)
+        .read(
+          materialControllerProvider(
+            courseId: courseId,
+            topicId: topicId,
+          ).notifier,
+        )
         .uploadFile(platformFile);
 
     if (context.mounted) {
       final state = ref.read(
-          materialControllerProvider(courseId: courseId, topicId: topicId));
+        materialControllerProvider(courseId: courseId, topicId: topicId),
+      );
       if (state.hasError) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Upload failed. Check the file type and size (max 20 MB).'),
+            content: Text(
+              'Upload failed. Check type and size (20 MB default, 50 MB audio).',
+            ),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -66,7 +86,8 @@ class MaterialListView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final materialsAsync = ref.watch(
-        materialControllerProvider(courseId: courseId, topicId: topicId));
+      materialControllerProvider(courseId: courseId, topicId: topicId),
+    );
     final theme = Theme.of(context);
 
     return Column(
@@ -76,13 +97,18 @@ class MaterialListView extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(topicTitle,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              topicTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             IconButton(
               tooltip: 'Upload material',
-              icon: Icon(Icons.upload_file_rounded,
-                  color: theme.colorScheme.primary),
+              icon: Icon(
+                Icons.upload_file_rounded,
+                color: theme.colorScheme.primary,
+              ),
               onPressed: materialsAsync.isLoading
                   ? null
                   : () => _pickAndUpload(context, ref),
@@ -96,9 +122,10 @@ class MaterialListView extends ConsumerWidget {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'No materials yet. Tap ↑ to upload a PDF, TXT, or MD.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.white38),
+                  'No materials yet. Tap ↑ to upload docs, images, or audio.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white38,
+                  ),
                 ),
               );
             }
@@ -109,16 +136,18 @@ class MaterialListView extends ConsumerWidget {
               itemBuilder: (_, i) => _MaterialTile(material: materials[i]),
             );
           },
-          loading: () =>
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              ),
+          loading: () => const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          ),
           error: (_, __) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('Could not load materials.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: Colors.redAccent)),
+            child: Text(
+              'Could not load materials.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.redAccent,
+              ),
+            ),
           ),
         ),
       ],
@@ -152,6 +181,10 @@ class _MaterialTile extends StatelessWidget {
       domain.MaterialFormatType.pdf => Icons.picture_as_pdf_rounded,
       domain.MaterialFormatType.txt => Icons.article_rounded,
       domain.MaterialFormatType.md => Icons.code_rounded,
+      domain.MaterialFormatType.png => Icons.image_rounded,
+      domain.MaterialFormatType.jpg => Icons.image_rounded,
+      domain.MaterialFormatType.jpeg => Icons.image_rounded,
+      domain.MaterialFormatType.webp => Icons.image_rounded,
       domain.MaterialFormatType.audio => Icons.headphones_rounded,
     };
 
@@ -160,8 +193,9 @@ class _MaterialTile extends StatelessWidget {
       leading: Icon(fileIcon, color: theme.colorScheme.primary, size: 28),
       title: Text(
         material.originalName,
-        style: theme.textTheme.bodyMedium
-            ?.copyWith(fontWeight: FontWeight.w500),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -172,8 +206,10 @@ class _MaterialTile extends StatelessWidget {
       trailing: Chip(
         label: Text(
           status.name.toUpperCase(),
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: statusColor, fontWeight: FontWeight.bold),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: statusColor,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         avatar: Icon(statusIcon, size: 14, color: statusColor),
         backgroundColor: statusColor.withValues(alpha: 0.1),

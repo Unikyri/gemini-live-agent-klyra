@@ -46,6 +46,9 @@ dependencies:
   record: ^6.0.0
   permission_handler: ^11.3.1
   audioplayers: ^6.1.0
+  flutter_markdown: ^0.7.3
+  flutter_math_fork: ^0.7.4
+  markdown: ^7.3.0
 
 dev_dependencies:
   flutter_test:

@@ -23,12 +23,21 @@ enum MaterialFormatType {
   txt,
   @JsonValue('md')
   md,
+  @JsonValue('png')
+  png,
+  @JsonValue('jpg')
+  jpg,
+  @JsonValue('jpeg')
+  jpeg,
+  @JsonValue('webp')
+  webp,
   @JsonValue('audio')
   audio,
 }
 
 extension MaterialStatusX on MaterialStatus {
-  bool get isProcessing => this == MaterialStatus.pending || this == MaterialStatus.processing;
+  bool get isProcessing =>
+      this == MaterialStatus.pending || this == MaterialStatus.processing;
   bool get isReady => this == MaterialStatus.validated;
   bool get isFailed => this == MaterialStatus.rejected;
 }

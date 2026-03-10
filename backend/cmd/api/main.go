@@ -96,11 +96,6 @@ func main() {
 	imageGenSvc := repositories.NewVertexImagenService() // Imagen 3 on Vertex AI
 	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc, imageGenSvc)
 
-	// --- Material wiring (US4) ---
-	materialRepo := repositories.NewPostgresMaterialRepository(db)
-	textExtractor := repositories.NewPlainTextExtractor()
-	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor)
-
 	// --- RAG wiring (US8) ---
 	// SECURITY: EMBEDDING_CREDENTIALS_FILE should be the same service account used
 	// for Imagen/GCS (GOOGLE_APPLICATION_CREDENTIALS). Separate if least-privilege needed.
@@ -134,7 +129,14 @@ func main() {
 	}
 
 	chunkRepo := repositories.NewPostgresChunkRepository(db)
+	materialRepo := repositories.NewPostgresMaterialRepository(db)
 	ragUseCase = usecases.NewRAGUseCase(materialRepo, chunkRepo, embeddingSvc)
+	summaryGenerator := repositories.NewMarkdownSummaryGenerator()
+	topicUseCase := usecases.NewTopicUseCase(topicRepo, materialRepo, summaryGenerator)
+
+	// --- Material wiring (US4) ---
+	textExtractor := repositories.NewPlainTextExtractor()
+	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor, ragUseCase)
 
 	// --- HTTP Router setup ---
 	// BLOCKER fix: use gin.New() instead of gin.Default() to avoid trusting all proxies.
@@ -217,6 +219,10 @@ func main() {
 		// US8 — RAG context retrieval endpoint.
 		ragHandler := httphandlers.NewRAGHandler(ragUseCase)
 		ragHandler.RegisterRoutes(protected)
+
+		// Sprint 7 — Topic readiness and summary endpoints.
+		topicHandler := httphandlers.NewTopicHandler(topicUseCase)
+		topicHandler.RegisterRoutes(protected)
 	}
 
 	port := getEnv("PORT", "8080")

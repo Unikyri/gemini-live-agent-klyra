@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,6 +33,23 @@ func (r *TopicRepository) Create(ctx context.Context, topic *domain.Topic) error
 	return r.CreateTopic(topic)
 }
 
+// FindByID implements ports.TopicRepository.
+func (r *TopicRepository) FindByID(ctx context.Context, topicID string) (*domain.Topic, error) {
+	parsedTopicID, err := uuid.Parse(topicID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid topic id: %w", err)
+	}
+	var topic domain.Topic
+	result := r.db.WithContext(ctx).Where("id = ?", parsedTopicID).First(&topic)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find topic: %w", result.Error)
+	}
+	return &topic, nil
+}
+
 // FindByCourse implements ports.TopicRepository.
 func (r *TopicRepository) FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error) {
 	parsedCourseID, err := uuid.Parse(courseID)
@@ -50,6 +68,53 @@ func (r *TopicRepository) FindByCourse(ctx context.Context, courseID string) ([]
 	}
 	_ = ctx
 	return out, nil
+}
+
+// GetSummaryCache implements ports.TopicRepository.
+func (r *TopicRepository) GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error) {
+	topic, err := r.FindByID(ctx, topicID)
+	if err != nil || topic == nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0)
+	if topic.SummaryMaterialIDs != "" {
+		if err := json.Unmarshal([]byte(topic.SummaryMaterialIDs), &ids); err != nil {
+			return nil, fmt.Errorf("failed to decode summary material IDs: %w", err)
+		}
+	}
+
+	return &domain.TopicSummaryCache{
+		TopicID:            topic.ID,
+		SummaryMarkdown:    topic.SummaryMarkdown,
+		SummarySourceHash:  topic.SummarySourceHash,
+		SummaryMaterialIDs: ids,
+		SummaryUpdatedAt:   topic.SummaryUpdatedAt,
+	}, nil
+}
+
+// UpsertSummaryCache implements ports.TopicRepository.
+func (r *TopicRepository) UpsertSummaryCache(ctx context.Context, cache domain.TopicSummaryCache) error {
+	idsJSON, err := json.Marshal(cache.SummaryMaterialIDs)
+	if err != nil {
+		return fmt.Errorf("failed to encode summary material IDs: %w", err)
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"summary_markdown":     cache.SummaryMarkdown,
+		"summary_source_hash":  cache.SummarySourceHash,
+		"summary_material_ids": string(idsJSON),
+		"summary_updated_at":   now,
+		"updated_at":           now,
+	}
+
+	result := r.db.WithContext(ctx).Model(&domain.Topic{}).Where("id = ?", cache.TopicID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("failed to upsert summary cache: %w", result.Error)
+	}
+
+	return nil
 }
 
 // CreateTopic persists a new topic under a course.
