@@ -83,7 +83,7 @@ func (h *RAGHandler) GetTopicContext(c *gin.Context) {
 		}
 	}
 
-	context, err := h.ragUseCase.GetTopicContext(c.Request.Context(), topicID, query)
+	result, err := h.ragUseCase.GetTopicContext(c.Request.Context(), topicID, query)
 	if err != nil {
 		log.Printf("[RAG] GetTopicContext error for topic %s: %v", topicID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
@@ -91,9 +91,11 @@ func (h *RAGHandler) GetTopicContext(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"topic_id": topicID,
-		"context":  context,
-		"query":    query,
+		"topic_id":      topicID,
+		"context":       result.Context,
+		"query":         query,
+		"has_materials": result.HasMaterials,
+		"message":       result.Message,
 	})
 }
 
@@ -131,7 +133,7 @@ func (h *RAGHandler) GetCourseContext(c *gin.Context) {
 		return
 	}
 
-	contextText, truncated, err := h.ragUseCase.GetCourseContext(c.Request.Context(), courseID, query)
+	result, err := h.ragUseCase.GetCourseContext(c.Request.Context(), courseID, query)
 	if err != nil {
 		log.Printf("[RAG] GetCourseContext error for course %s: %v", courseID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
@@ -139,9 +141,11 @@ func (h *RAGHandler) GetCourseContext(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"course_id": courseID,
-		"context":   contextText,
-		"query":     query,
-		"truncated": truncated,
+		"course_id":     courseID,
+		"context":       result.Context,
+		"query":         query,
+		"truncated":     result.Truncated,
+		"has_materials": result.HasMaterials,
+		"message":       result.Message,
 	})
 }

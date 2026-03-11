@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:klyra/core/network/dio_client.dart';
 import 'package:klyra/features/course/domain/material_models.dart';
@@ -34,17 +36,23 @@ class MaterialRemoteDataSource {
   /// Supports both web (bytes) and native (path) platform payloads.
   Future<Material> uploadMaterial(
       String courseId, String topicId, PlatformFile file) async {
+    // Derive content type from the actual file name/extension.
+    final mimeType = lookupMimeType(file.name) ?? 'application/octet-stream';
+    final mediaType = MediaType.parse(mimeType);
+
     MultipartFile multipart;
 
     if (file.bytes != null) {
       multipart = MultipartFile.fromBytes(
         file.bytes!,
         filename: file.name,
+        contentType: mediaType,
       );
     } else if (file.path != null) {
       multipart = await MultipartFile.fromFile(
         file.path!,
         filename: file.name,
+        contentType: mediaType,
       );
     } else {
       throw Exception('Picked file has no bytes or path');

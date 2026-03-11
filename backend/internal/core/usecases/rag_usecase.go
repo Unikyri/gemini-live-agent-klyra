@@ -30,6 +30,14 @@ const (
 	maxCourseChunks = 30
 )
 
+// ContextResult separates the retrieved context from additional metadata used by clients.
+type ContextResult struct {
+	Context      string
+	Truncated    bool
+	HasMaterials bool
+	Message      string
+}
+
 // RAGUseCase orchestrates the text chunking, embedding, and retrieval pipeline.
 type RAGUseCase struct {
 	materialRepo ports.MaterialRepository
@@ -37,7 +45,6 @@ type RAGUseCase struct {
 	topicRepo    ports.TopicRepository
 	embedder     ports.Embedder
 }
-
 // NewRAGUseCase constructs a new RAGUseCase.
 func NewRAGUseCase(
 	materialRepo ports.MaterialRepository,
@@ -128,48 +135,77 @@ func (uc *RAGUseCase) ProcessMaterialChunks(ctx context.Context, materialID stri
 // GetTopicContext retrieves the most relevant context for a topic given a user query.
 // If query is empty, returns the full concatenated text of all chunks (for session init).
 // SECURITY: topicID filters all retrieval — cross-user leakage is impossible.
-func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string) (string, error) {
+func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string) (*ContextResult, error) {
 	if query == "" {
 		// Return full context (used when starting a tutoring session)
 		chunks, err := uc.chunkRepo.GetChunksByTopic(ctx, topicID)
 		if err != nil {
-			return "", fmt.Errorf("rag: get topic context: %w", err)
+			return nil, fmt.Errorf("rag: get topic context: %w", err)
 		}
 		if len(chunks) == 0 {
-			return "Aún no hay material validado para este tema. Sube material de estudio para generar contexto.", nil
+			return &ContextResult{
+				Context:      "",
+				Truncated:    false,
+				HasMaterials: false,
+				Message:      "No hay materiales para este tema. El tutor usará su conocimiento base.",
+			}, nil
 		}
 		parts := make([]string, len(chunks))
 		for i, c := range chunks {
 			parts[i] = c.Content
 		}
-		return strings.Join(parts, "\n\n"), nil
+		return &ContextResult{
+			Context:      strings.Join(parts, "\n\n"),
+			Truncated:    false,
+			HasMaterials: true,
+			Message:      "",
+		}, nil
 	}
 
 	// In local/dev environments embeddings may be disabled. Fallback to full topic context.
 	if uc.embedder == nil {
 		chunks, err := uc.chunkRepo.GetChunksByTopic(ctx, topicID)
 		if err != nil {
-			return "", fmt.Errorf("rag: get topic context: %w", err)
+			return nil, fmt.Errorf("rag: get topic context: %w", err)
 		}
 		if len(chunks) == 0 {
-			return "Aún no hay material validado para este tema. Sube material de estudio para generar contexto.", nil
+			return &ContextResult{
+				Context:      "",
+				Truncated:    false,
+				HasMaterials: false,
+				Message:      "No hay materiales para este tema. El tutor usará su conocimiento base.",
+			}, nil
 		}
 		parts := make([]string, len(chunks))
 		for i, c := range chunks {
 			parts[i] = c.Content
 		}
-		return strings.Join(parts, "\n\n"), nil
+		return &ContextResult{
+			Context:      strings.Join(parts, "\n\n"),
+			Truncated:    false,
+			HasMaterials: true,
+			Message:      "",
+		}, nil
 	}
 
 	// Embed the query and do similarity search
 	queryEmbedding, err := uc.embedder.Embed(ctx, query)
 	if err != nil {
-		return "", fmt.Errorf("rag: embed query: %w", err)
+		return nil, fmt.Errorf("rag: embed query: %w", err)
 	}
 
 	results, err := uc.chunkRepo.SearchSimilar(ctx, topicID, queryEmbedding, 5)
 	if err != nil {
-		return "", fmt.Errorf("rag: similarity search: %w", err)
+		return nil, fmt.Errorf("rag: similarity search: %w", err)
+	}
+
+	if len(results) == 0 {
+		return &ContextResult{
+			Context:      "",
+			Truncated:    false,
+			HasMaterials: false,
+			Message:      "No hay materiales para este tema. El tutor usará su conocimiento base.",
+		}, nil
 	}
 
 	var sb strings.Builder
@@ -177,20 +213,25 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		sb.WriteString(r.Chunk.Content)
 		sb.WriteString("\n\n")
 	}
-	return sb.String(), nil
+	return &ContextResult{
+		Context:      strings.TrimSuffix(sb.String(), "\n\n"),
+		Truncated:    false,
+		HasMaterials: true,
+		Message:      "",
+	}, nil
 }
 
 // GetCourseContext returns context for the whole course: either truncated top-N per topic (no query)
 // or similarity search across course (with query). Result is grouped by topic with "### <title>" headers.
-// Returns (context, truncated, error). truncated is true when chunks were capped.
-func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query string) (contextText string, truncated bool, err error) {
+// Returns a ContextResult with context, truncated flag and metadata.
+func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query string) (*ContextResult, error) {
 	if uc.topicRepo == nil {
-		return "", false, fmt.Errorf("rag: topic repo required for GetCourseContext")
+		return nil, fmt.Errorf("rag: topic repo required for GetCourseContext")
 	}
 
 	topics, err := uc.topicRepo.FindByCourse(ctx, courseID)
 	if err != nil {
-		return "", false, fmt.Errorf("rag: find topics: %w", err)
+		return nil, fmt.Errorf("rag: find topics: %w", err)
 	}
 	topicTitles := make(map[string]string)
 	for _, t := range topics {
@@ -201,22 +242,39 @@ func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query stri
 	if query != "" && uc.embedder != nil {
 		queryEmbedding, err := uc.embedder.Embed(ctx, query)
 		if err != nil {
-			return "", false, fmt.Errorf("rag: embed query: %w", err)
+			return nil, fmt.Errorf("rag: embed query: %w", err)
 		}
 		results, err := uc.chunkRepo.SearchSimilarByCourse(ctx, courseID, queryEmbedding, 10)
 		if err != nil {
-			return "", false, fmt.Errorf("rag: search similar by course: %w", err)
+			return nil, fmt.Errorf("rag: search similar by course: %w", err)
 		}
-		truncated = true
-		return buildCourseContextFromResults(results, topicTitles), truncated, nil
+		if len(results) == 0 {
+			return &ContextResult{
+				Context:      "",
+				Truncated:    false,
+				HasMaterials: false,
+				Message:      "No hay materiales en ningún tema de este curso. El tutor usará su conocimiento base.",
+			}, nil
+		}
+		return &ContextResult{
+			Context:      buildCourseContextFromResults(results, topicTitles),
+			Truncated:    true,
+			HasMaterials: true,
+			Message:      "",
+		}, nil
 	}
 
 	chunks, err := uc.chunkRepo.GetChunksByCourse(ctx, courseID)
 	if err != nil {
-		return "", false, fmt.Errorf("rag: get chunks by course: %w", err)
+		return nil, fmt.Errorf("rag: get chunks by course: %w", err)
 	}
 	if len(chunks) == 0 {
-		return "Aún no hay material validado para este curso. Sube material de estudio en algún tema para generar contexto.", false, nil
+		return &ContextResult{
+			Context:      "",
+			Truncated:    false,
+			HasMaterials: false,
+			Message:      "No hay materiales en ningún tema de este curso. El tutor usará su conocimiento base.",
+		}, nil
 	}
 
 	// Group by topic_id, take first maxChunksPerTopic per topic, cap total at maxCourseChunks.
@@ -246,8 +304,13 @@ func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query stri
 			}
 		}
 	}
-	truncated = len(selected) < len(chunks)
-	return buildCourseContextFromChunks(selected, topicTitles), truncated, nil
+	truncated := len(selected) < len(chunks)
+	return &ContextResult{
+		Context:      buildCourseContextFromChunks(selected, topicTitles),
+		Truncated:    truncated,
+		HasMaterials: true,
+		Message:      "",
+	}, nil
 }
 
 func orderedTopicIDs(chunks []domain.MaterialChunk) []string {

@@ -39,6 +39,13 @@ GoRouter appRouter(Ref ref) {
         },
       ),
       GoRoute(
+        path: '/tutor/:courseId',
+        builder: (context, state) {
+          final courseId = state.pathParameters['courseId']!;
+          return TutorSessionScreen(courseId: courseId);
+        },
+      ),
+      GoRoute(
         path: '/tutor/:courseId/:topicId',
         builder: (context, state) {
           final courseId = state.pathParameters['courseId']!;

@@ -23,16 +23,26 @@ const (
 
 // allowedMaterialFormats maps MIME types detected from magic bytes to MaterialFormatType.
 var allowedMaterialFormats = map[string]domain.MaterialFormatType{
-	"application/pdf": domain.MaterialFormatPDF,
-	"text/plain":      domain.MaterialFormatTXT,
-	"image/png":       domain.MaterialFormatPNG,
-	"image/jpeg":      domain.MaterialFormatJPEG,
-	"image/webp":      domain.MaterialFormatWEBP,
-	"audio/mpeg":      domain.MaterialFormatAudio,
-	"audio/wav":       domain.MaterialFormatAudio,
-	"audio/x-wav":     domain.MaterialFormatAudio,
-	"audio/mp4":       domain.MaterialFormatAudio,
-	"audio/x-m4a":     domain.MaterialFormatAudio,
+	// PDF
+	"application/pdf":   domain.MaterialFormatPDF,
+	"application/x-pdf": domain.MaterialFormatPDF,
+	// Text
+	"text/plain": domain.MaterialFormatTXT,
+	// Images
+	"image/png":  domain.MaterialFormatPNG,
+	"image/jpeg": domain.MaterialFormatJPEG,
+	"image/jpg":  domain.MaterialFormatJPEG,
+	"image/webp": domain.MaterialFormatWEBP,
+	// Audio
+	"audio/mpeg":  domain.MaterialFormatAudio,
+	"audio/mp3":   domain.MaterialFormatAudio,
+	"audio/wav":   domain.MaterialFormatAudio,
+	"audio/x-wav": domain.MaterialFormatAudio,
+	"audio/mp4":   domain.MaterialFormatAudio,
+	"audio/x-m4a": domain.MaterialFormatAudio,
+	"audio/m4a":   domain.MaterialFormatAudio,
+	// Fallback: application/octet-stream is accepted when the extension is valid.
+	"application/octet-stream": domain.MaterialFormatTXT,
 }
 
 // allowedExtensions maps file extensions to MaterialFormatType for text/plain disambiguation.
@@ -99,48 +109,10 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not read uploaded file"})
 		return
 	}
-	// SECURITY: determine format from both extension AND magic bytes.
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	formatType, extOK := allowedExtensions[ext]
-	if !extOK {
-		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only PDF, TXT, MD, PNG, JPG, JPEG, WEBP, MP3, WAV and M4A files are accepted"})
+	formatType, statusCode, errMsg := validateMaterialFile(header.Filename, fileData)
+	if statusCode != 0 {
+		c.JSON(statusCode, gin.H{"error": errMsg})
 		return
-	}
-
-	sizeLimit := maxDefaultMaterialSize
-	if formatType == domain.MaterialFormatAudio {
-		sizeLimit = maxAudioMaterialSize
-	}
-	if int64(len(fileData)) > int64(sizeLimit) {
-		if formatType == domain.MaterialFormatAudio {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "audio file exceeds 50 MB limit"})
-			return
-		}
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds 20 MB limit"})
-		return
-	}
-
-	// Validate MIME and extension compatibility.
-	detectedMIME := http.DetectContentType(fileData)
-	// Normalize MIME by stripping optional parameters (e.g. "text/plain; charset=utf-8").
-	if i := strings.IndexByte(detectedMIME, ';'); i >= 0 {
-		detectedMIME = strings.TrimSpace(detectedMIME[:i])
-	}
-	if formatType == domain.MaterialFormatPDF && detectedMIME != "application/pdf" {
-		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "file content does not match the .pdf extension"})
-		return
-	}
-	if formatType != domain.MaterialFormatMD {
-		// Some clients/platforms may label small text uploads as application/octet-stream.
-		// Since we already validated the extension, allow octet-stream for plain text.
-		if formatType == domain.MaterialFormatTXT && detectedMIME == "application/octet-stream" {
-			// ok
-		} else {
-		if _, ok := allowedMaterialFormats[detectedMIME]; !ok {
-			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "unsupported file MIME type"})
-			return
-		}
-		}
 	}
 
 	material, err := h.materialUseCase.UploadMaterial(c.Request.Context(), usecases.UploadMaterialInput{
@@ -168,6 +140,66 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, material)
+}
+
+func validateMaterialFile(filename string, fileData []byte) (domain.MaterialFormatType, int, string) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	formatType, extOK := allowedExtensions[ext]
+	if !extOK {
+		return "", http.StatusUnsupportedMediaType, "only PDF, TXT, MD, PNG, JPG, JPEG, WEBP, MP3, WAV and M4A files are accepted"
+	}
+
+	sizeLimit := maxDefaultMaterialSize
+	if formatType == domain.MaterialFormatAudio {
+		sizeLimit = maxAudioMaterialSize
+	}
+	if int64(len(fileData)) > int64(sizeLimit) {
+		if formatType == domain.MaterialFormatAudio {
+			return "", http.StatusRequestEntityTooLarge, "audio file exceeds 50 MB limit"
+		}
+		return "", http.StatusRequestEntityTooLarge, "file exceeds 20 MB limit"
+	}
+
+	detectedMIME := http.DetectContentType(fileData)
+	if i := strings.IndexByte(detectedMIME, ';'); i >= 0 {
+		detectedMIME = strings.TrimSpace(detectedMIME[:i])
+	}
+
+	if detectedMIME == "application/octet-stream" {
+		log.Printf(
+			"[Material] WARN: MIME=application/octet-stream for file=%s ext=%s — accepted by extension",
+			filename, ext,
+		)
+		return formatType, 0, ""
+	}
+	if formatType == domain.MaterialFormatPDF {
+		if detectedMIME != "application/pdf" && detectedMIME != "application/x-pdf" {
+			log.Printf(
+				"[Material] WARN: MIME mismatch for PDF file=%s ext=%s detected=%s expected=%s action=%s",
+				filename, ext, detectedMIME, "application/pdf", "rejected",
+			)
+			return "", http.StatusUnsupportedMediaType, "file content does not match the .pdf extension"
+		}
+		return formatType, 0, ""
+	}
+	if formatType == domain.MaterialFormatTXT || formatType == domain.MaterialFormatMD {
+		if detectedMIME != "text/plain" && detectedMIME != "application/octet-stream" {
+			log.Printf(
+				"[Material] WARN: MIME discrepancy for text file=%s ext=%s detected=%s action=%s",
+				filename, ext, detectedMIME, "accepted",
+			)
+		}
+		return formatType, 0, ""
+	}
+	if _, ok := allowedMaterialFormats[detectedMIME]; !ok {
+		log.Printf(
+			"[Material] WARN: MIME mismatch for file=%s ext=%s detected=%s action=%s",
+			filename, ext, detectedMIME, "rejected",
+		)
+		return "", http.StatusUnsupportedMediaType, "unsupported file MIME type"
+	}
+
+	return formatType, 0, ""
 }
 
 // ListMaterials handles GET /api/v1/courses/:course_id/topics/:topic_id/materials

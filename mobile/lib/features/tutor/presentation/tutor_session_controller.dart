@@ -4,11 +4,18 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:riverpod/riverpod.dart';
 import 'package:klyra/core/network/dio_client.dart';
 import 'package:klyra/features/course/data/course_repository.dart';
 import 'package:klyra/features/tutor/data/gemini_live_service.dart';
 
 part 'tutor_session_controller.g.dart';
+
+typedef GeminiLiveServiceFactory = GeminiLiveService Function(String apiKey);
+
+final geminiLiveServiceFactoryProvider = Provider<GeminiLiveServiceFactory>(
+  (ref) => (apiKey) => GeminiLiveService(apiKey),
+);
 
 /// Holds the complete state of the tutor session UI.
 class TutorSessionState {
@@ -19,6 +26,7 @@ class TutorSessionState {
   final String? currentTopicId;
   final Set<String> loadedTopicIds;
   final bool isLoadingContext;
+  final bool hasCurrentTopicMaterials;
 
   const TutorSessionState({
     this.sessionState = SessionState.idle,
@@ -28,6 +36,7 @@ class TutorSessionState {
     this.currentTopicId,
     Set<String>? loadedTopicIds,
     this.isLoadingContext = false,
+    this.hasCurrentTopicMaterials = true,
   }) : loadedTopicIds = loadedTopicIds ?? const {};
 
   TutorSessionState copyWith({
@@ -38,6 +47,7 @@ class TutorSessionState {
     String? currentTopicId,
     Set<String>? loadedTopicIds,
     bool? isLoadingContext,
+    bool? hasCurrentTopicMaterials,
   }) {
     return TutorSessionState(
       sessionState: sessionState ?? this.sessionState,
@@ -47,6 +57,8 @@ class TutorSessionState {
       currentTopicId: currentTopicId ?? this.currentTopicId,
       loadedTopicIds: loadedTopicIds ?? this.loadedTopicIds,
       isLoadingContext: isLoadingContext ?? this.isLoadingContext,
+      hasCurrentTopicMaterials:
+          hasCurrentTopicMaterials ?? this.hasCurrentTopicMaterials,
     );
   }
 }
@@ -66,8 +78,8 @@ class TutorSessionController extends _$TutorSessionController {
   );
 
   late GeminiLiveService _geminiService;
-  final AudioRecorder _recorder = AudioRecorder();
-  final AudioPlayer _player = AudioPlayer();
+  AudioRecorder? _recorder;
+  AudioPlayer? _player;
 
   StreamSubscription<SessionState>? _stateSub;
   StreamSubscription<Uint8List>? _audioSub;
@@ -76,7 +88,8 @@ class TutorSessionController extends _$TutorSessionController {
 
   @override
   TutorSessionState build() {
-    _geminiService = GeminiLiveService(_geminiApiKey);
+    final serviceFactory = ref.read(geminiLiveServiceFactoryProvider);
+    _geminiService = serviceFactory(_geminiApiKey);
     ref.onDispose(() {
       _cleanup();
     });
@@ -104,7 +117,7 @@ class TutorSessionController extends _$TutorSessionController {
         state = state.copyWith(sessionState: s);
       });
       _audioSub = _geminiService.audioOutputStream.listen((audioBytes) {
-        _player.play(BytesSource(audioBytes));
+        _player?.play(BytesSource(audioBytes));
       });
       var fullTranscript = '';
       _transcriptSub = _geminiService.transcriptStream.listen((chunk) {
@@ -122,6 +135,8 @@ class TutorSessionController extends _$TutorSessionController {
         await loadTopicContext(courseId, topicId);
       }
 
+      _recorder ??= AudioRecorder();
+      _player ??= AudioPlayer();
       await _startMicrophone();
     } catch (e) {
       debugPrint('[TutorSession] startSession error: $e');
@@ -135,6 +150,8 @@ class TutorSessionController extends _$TutorSessionController {
   /// Load context for a specific topic and send it to the active Gemini session.
   Future<void> loadTopicContext(String courseId, String topicId) async {
     if (state.loadedTopicIds.contains(topicId)) {
+      // Topic context already loaded previously; just switch selection.
+      state = state.copyWith(currentTopicId: topicId);
       return;
     }
     state = state.copyWith(isLoadingContext: true);
@@ -144,11 +161,41 @@ class TutorSessionController extends _$TutorSessionController {
         '/courses/$courseId/topics/$topicId/context',
       );
       final contextText = (response.data['context'] as String?) ?? '';
-      _geminiService.sendContextUpdate(contextText);
+      final hasMaterials =
+          (response.data['has_materials'] as bool?) ?? contextText.isNotEmpty;
+      final message = (response.data['message'] as String?) ?? '';
+
+      if (contextText.isNotEmpty) {
+        _geminiService.sendContextUpdate(contextText);
+      } else {
+        // Zero-material: build minimal context from topic title so tutor knows the intent.
+        final repo = ref.read(courseRepositoryProvider);
+        final course = await repo.getCourse(courseId);
+        final topicTitle = course.topics
+                .where((t) => t.id == topicId)
+                .firstOrNull
+                ?.title ??
+            topicId;
+        final minimalContext = StringBuffer()
+          ..writeln('[Contexto actualizado — Tema: $topicTitle]')
+          ..writeln(
+              'El estudiante quiere hablar del tema: "$topicTitle". No hay material de referencia para este tema.')
+          ..writeln(
+              'Usa tu conocimiento para guiar la conversación de forma útil.')
+          ..write(
+              'Si el estudiante quiere respuestas más precisas, puede subir material de estudio.');
+        if (message.isNotEmpty) {
+          minimalContext
+              .writeln('\n\nNota del sistema: $message');
+        }
+        _geminiService.sendContextUpdate(minimalContext.toString());
+      }
+
       state = state.copyWith(
         currentTopicId: topicId,
         loadedTopicIds: {...state.loadedTopicIds, topicId},
         isLoadingContext: false,
+        hasCurrentTopicMaterials: hasMaterials,
       );
     } catch (e) {
       debugPrint('[TutorSession] loadTopicContext error: $e');
@@ -185,7 +232,10 @@ class TutorSessionController extends _$TutorSessionController {
   }
 
   Future<void> _startMicrophone() async {
-    final hasPermission = await _recorder.hasPermission();
+    final recorder = _recorder;
+    if (recorder == null) return;
+
+    final hasPermission = await recorder.hasPermission();
     if (!hasPermission) {
       state = state.copyWith(
         error: 'Microphone permission denied. Please enable it in settings.',
@@ -201,7 +251,7 @@ class TutorSessionController extends _$TutorSessionController {
       numChannels: 1,
     );
 
-    final audioStream = await _recorder.startStream(config);
+    final audioStream = await recorder.startStream(config);
     state = state.copyWith(isMicrophoneActive: true);
 
     // Store subscription so it can be cancelled on stopSession()
@@ -211,7 +261,7 @@ class TutorSessionController extends _$TutorSessionController {
   }
 
   Future<void> _stopMicrophone() async {
-    await _recorder.stop();
+    await _recorder?.stop();
     state = state.copyWith(isMicrophoneActive: false);
   }
 
@@ -220,8 +270,8 @@ class TutorSessionController extends _$TutorSessionController {
     await _audioSub?.cancel();
     await _transcriptSub?.cancel();
     await _audioMicSub?.cancel(); // prevent mic stream leak
-    await _recorder.dispose();
-    await _player.dispose();
+    await _recorder?.dispose();
+    await _player?.dispose();
     await _geminiService.disconnect(); // await async disconnect
     _geminiService.dispose();
   }

@@ -141,6 +141,27 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
               ),
               if (sessionState.isLoadingContext)
                 const LinearProgressIndicator(color: Color(0xFF6C63FF)),
+              if (!sessionState.hasCurrentTopicMaterials &&
+                  sessionState.currentTopicId != null)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.amber.withOpacity(0.4),
+                      ),
+                    ),
+                    child: Text(
+                      'Sin material de referencia — el tutor usará su conocimiento base.',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: Colors.amberAccent),
+                    ),
+                  ),
+                ),
             ],
 
             // --- Avatar Display Area ---

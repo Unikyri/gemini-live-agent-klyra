@@ -59,6 +59,8 @@ void main() {
       expect(adapter.lastRequest?.method, 'POST');
       expect(adapter.lastRequest?.path, '/courses/c1/topics/t1/materials');
       expect(adapter.lastRequest?.data, isA<FormData>());
+      final formData = adapter.lastRequest?.data as FormData;
+      expect(formData.files.first.value.contentType.toString(), 'application/pdf');
     });
 
     test('uploads file path successfully', () async {
@@ -82,6 +84,8 @@ void main() {
       expect(material.originalName, 'm1.pdf');
       expect(adapter.lastRequest?.method, 'POST');
       expect(adapter.lastRequest?.path, '/courses/c1/topics/t1/materials');
+      final formData = adapter.lastRequest?.data as FormData;
+      expect(formData.files.first.value.contentType.toString(), 'text/plain');
     });
 
     test('throws when file has no bytes and no path', () async {

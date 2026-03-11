@@ -51,6 +51,22 @@ func (m *topicRepoMock) UpsertSummaryCache(ctx context.Context, cache domain.Top
 	return nil
 }
 
+func (m *topicRepoMock) Update(ctx context.Context, topic *domain.Topic) error {
+	_ = ctx
+	m.topic = topic
+	return nil
+}
+
+func (m *topicRepoMock) SoftDelete(ctx context.Context, id string) error {
+	_ = ctx
+	_ = id
+	return nil
+}
+
+func (m *topicRepoMock) FindByCourseForCascade(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	return m.FindByCourse(ctx, courseID)
+}
+
 type materialRepoMock struct {
 	materials []domain.Material
 }
@@ -96,6 +112,12 @@ func (m *materialRepoMock) UpdateStatus(ctx context.Context, materialID string, 
 	_ = materialID
 	_ = status
 	_ = extractedText
+	return nil
+}
+
+func (m *materialRepoMock) SoftDeleteByTopicIDs(ctx context.Context, topicIDs []string) error {
+	_ = ctx
+	_ = topicIDs
 	return nil
 }
 

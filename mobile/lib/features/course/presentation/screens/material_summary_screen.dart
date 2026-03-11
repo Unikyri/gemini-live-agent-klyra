@@ -93,7 +93,7 @@ class _MaterialSummaryScreenState extends ConsumerState<MaterialSummaryScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Icon(
-              Icons.lock_outline,
+              Icons.info_outline,
               size: 48,
               color: Colors.orangeAccent,
             ),
@@ -102,13 +102,21 @@ class _MaterialSummaryScreenState extends ConsumerState<MaterialSummaryScreen> {
             const SizedBox(height: 8),
             Text(
               'Validated: ${readiness.validatedCount} / Total: ${readiness.totalCount}',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style:
+                  theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
+              onPressed: () =>
+                  context.push('/tutor/${widget.courseId}/${widget.topicId}'),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Iniciar tutor de todas formas'),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
               onPressed: () => context.pop(),
               icon: const Icon(Icons.upload_file_rounded),
-              label: const Text('Go back to upload materials'),
+              label: const Text('Seguir subiendo materiales'),
             ),
           ],
         ),

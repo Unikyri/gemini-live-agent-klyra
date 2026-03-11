@@ -25,12 +25,15 @@ func TestGetTopicContext_QueryEmpty(t *testing.T) {
 		{ID: uuid.New(), MaterialID: materialID, TopicID: topicID, ChunkIndex: 1, Content: "contexto B"},
 	}
 
-	ctxText, err := uc.GetTopicContext(ctx, topicID.String(), "")
+	result, err := uc.GetTopicContext(ctx, topicID.String(), "")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if ctxText != "contexto A\n\ncontexto B" {
-		t.Fatalf("unexpected context: %q", ctxText)
+	if result.Context != "contexto A\n\ncontexto B" {
+		t.Fatalf("unexpected context: %q", result.Context)
+	}
+	if !result.HasMaterials {
+		t.Fatal("expected HasMaterials=true")
 	}
 }
 
@@ -44,18 +47,21 @@ func TestGetTopicContext_QueryProvided(t *testing.T) {
 	topicID := uuid.New()
 	SeedTopicWithThreeMaterialsFiveChunksEach(topicID, chunkRepo)
 
-	ctxText, err := uc.GetTopicContext(ctx, topicID.String(), "algebra")
+	result, err := uc.GetTopicContext(ctx, topicID.String(), "algebra")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if ctxText == "" {
+	if result.Context == "" {
 		t.Fatal("expected non-empty context")
 	}
-	if !strings.Contains(ctxText, "algebra") {
-		t.Fatalf("expected similar chunks in context, got: %q", ctxText)
+	if !strings.Contains(result.Context, "algebra") {
+		t.Fatalf("expected similar chunks in context, got: %q", result.Context)
+	}
+	if !result.HasMaterials {
+		t.Fatal("expected HasMaterials=true")
 	}
 
-	parts := strings.Split(ctxText, "\n\n")
+	parts := strings.Split(result.Context, "\n\n")
 	nonEmpty := 0
 	for _, p := range parts {
 		if strings.TrimSpace(p) != "" {
@@ -74,12 +80,90 @@ func TestGetTopicContext_NoChunksFound(t *testing.T) {
 	embedder := NewMockEmbedder()
 	uc := NewRAGUseCase(materialRepo, chunkRepo, embedder)
 
-	ctxText, err := uc.GetTopicContext(ctx, uuid.New().String(), "consulta")
+	result, err := uc.GetTopicContext(ctx, uuid.New().String(), "consulta")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if ctxText != "" {
-		t.Fatalf("expected empty context, got %q", ctxText)
+	if result.Context != "" {
+		t.Fatalf("expected empty context, got %q", result.Context)
+	}
+	if result.HasMaterials {
+		t.Fatal("expected HasMaterials=false")
+	}
+	if result.Message == "" {
+		t.Fatal("expected informative message for no materials")
+	}
+}
+
+func TestGetCourseContext_NoChunks(t *testing.T) {
+	ctx := context.Background()
+	materialRepo := NewMockMaterialRepository()
+	chunkRepo := NewMockChunkRepository()
+	topicRepo := NewMockTopicRepositoryForRAG()
+	embedder := NewMockEmbedder()
+	uc := NewRAGUseCaseWithTopicRepo(materialRepo, chunkRepo, topicRepo, embedder)
+
+	result, err := uc.GetCourseContext(ctx, uuid.New().String(), "")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Context != "" {
+		t.Fatalf("expected empty context, got %q", result.Context)
+	}
+	if result.HasMaterials {
+		t.Fatal("expected HasMaterials=false")
+	}
+	if result.Message == "" {
+		t.Fatal("expected informative message for no course materials")
+	}
+}
+
+func TestGetCourseContext_WithChunks(t *testing.T) {
+	ctx := context.Background()
+	materialRepo := NewMockMaterialRepository()
+	chunkRepo := NewMockChunkRepository()
+	topicRepo := NewMockTopicRepositoryForRAG()
+	embedder := NewMockEmbedder()
+	uc := NewRAGUseCaseWithTopicRepo(materialRepo, chunkRepo, topicRepo, embedder)
+
+	courseID := uuid.New()
+	topicID := uuid.New()
+	topicRepo.topicsByCourse[courseID.String()] = []domain.Topic{
+		{ID: topicID, Title: "Tema 1"},
+	}
+	chunkRepo.chunksByCourse[courseID.String()] = []domain.MaterialChunk{
+		{ID: uuid.New(), TopicID: topicID, MaterialID: uuid.New(), Content: "contenido curso"},
+	}
+
+	result, err := uc.GetCourseContext(ctx, courseID.String(), "")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Context == "" {
+		t.Fatal("expected non-empty context")
+	}
+	if !result.HasMaterials {
+		t.Fatal("expected HasMaterials=true")
+	}
+}
+
+func TestGetTopicContext_QueryWithNilEmbedderFallsBack(t *testing.T) {
+	ctx := context.Background()
+	materialRepo := NewMockMaterialRepository()
+	chunkRepo := NewMockChunkRepository()
+	uc := NewRAGUseCase(materialRepo, chunkRepo, nil)
+
+	topicID := uuid.New()
+	chunkRepo.chunksByTopic[topicID.String()] = []domain.MaterialChunk{
+		{ID: uuid.New(), TopicID: topicID, MaterialID: uuid.New(), Content: "fallback sin embedder"},
+	}
+
+	result, err := uc.GetTopicContext(ctx, topicID.String(), "query")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !strings.Contains(result.Context, "fallback sin embedder") {
+		t.Fatalf("unexpected fallback context: %q", result.Context)
 	}
 }
 
@@ -204,16 +288,26 @@ func (m *MockMaterialRepositoryForRAG) UpdateStatus(ctx context.Context, materia
 	return nil
 }
 
+func (m *MockMaterialRepositoryForRAG) SoftDeleteByTopicIDs(ctx context.Context, topicIDs []string) error {
+	_ = ctx
+	_ = topicIDs
+	return nil
+}
+
 type MockChunkRepository struct {
 	chunksByTopic map[string][]domain.MaterialChunk
+	chunksByCourse map[string][]domain.MaterialChunk
 	searchByTopic map[string][]domain.RAGResult
+	searchByCourse map[string][]domain.RAGResult
 	getByTopicErr error
 }
 
 func NewMockChunkRepository() *MockChunkRepository {
 	return &MockChunkRepository{
 		chunksByTopic: map[string][]domain.MaterialChunk{},
+		chunksByCourse: map[string][]domain.MaterialChunk{},
 		searchByTopic: map[string][]domain.RAGResult{},
+		searchByCourse: map[string][]domain.RAGResult{},
 	}
 }
 
@@ -251,8 +345,85 @@ func (m *MockChunkRepository) GetChunksByTopic(ctx context.Context, topicID stri
 	return m.chunksByTopic[topicID], nil
 }
 
+func (m *MockChunkRepository) GetChunksByCourse(ctx context.Context, courseID string) ([]domain.MaterialChunk, error) {
+	_ = ctx
+	return m.chunksByCourse[courseID], nil
+}
+
+func (m *MockChunkRepository) SearchSimilarByCourse(ctx context.Context, courseID string, queryEmbedding []float32, topK int) ([]domain.RAGResult, error) {
+	_ = ctx
+	_ = queryEmbedding
+	results := m.searchByCourse[courseID]
+	if topK > 0 && len(results) > topK {
+		return results[:topK], nil
+	}
+	return results, nil
+}
+
+func (m *MockChunkRepository) HardDeleteByTopicIDs(ctx context.Context, topicIDs []string) error {
+	_ = ctx
+	_ = topicIDs
+	return nil
+}
+
 type MockEmbedder struct {
 	returnErr error
+}
+
+type MockTopicRepositoryForRAG struct {
+	topicsByCourse map[string][]domain.Topic
+}
+
+func NewMockTopicRepositoryForRAG() *MockTopicRepositoryForRAG {
+	return &MockTopicRepositoryForRAG{
+		topicsByCourse: map[string][]domain.Topic{},
+	}
+}
+
+func (m *MockTopicRepositoryForRAG) Create(ctx context.Context, topic *domain.Topic) error {
+	_ = ctx
+	_ = topic
+	return nil
+}
+
+func (m *MockTopicRepositoryForRAG) FindByID(ctx context.Context, topicID string) (*domain.Topic, error) {
+	_ = ctx
+	_ = topicID
+	return nil, nil
+}
+
+func (m *MockTopicRepositoryForRAG) FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	_ = ctx
+	return m.topicsByCourse[courseID], nil
+}
+
+func (m *MockTopicRepositoryForRAG) GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error) {
+	_ = ctx
+	_ = topicID
+	return nil, nil
+}
+
+func (m *MockTopicRepositoryForRAG) UpsertSummaryCache(ctx context.Context, cache domain.TopicSummaryCache) error {
+	_ = ctx
+	_ = cache
+	return nil
+}
+
+func (m *MockTopicRepositoryForRAG) Update(ctx context.Context, topic *domain.Topic) error {
+	_ = ctx
+	_ = topic
+	return nil
+}
+
+func (m *MockTopicRepositoryForRAG) SoftDelete(ctx context.Context, id string) error {
+	_ = ctx
+	_ = id
+	return nil
+}
+
+func (m *MockTopicRepositoryForRAG) FindByCourseForCascade(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	_ = ctx
+	return m.topicsByCourse[courseID], nil
 }
 
 func NewMockEmbedder() *MockEmbedder {

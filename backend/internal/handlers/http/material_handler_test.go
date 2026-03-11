@@ -207,3 +207,66 @@ func TestListMaterials_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockUC.AssertExpectations(t)
 }
+
+func TestValidateMaterialFile_ExtensionFirstRules(t *testing.T) {
+	t.Run("allowed map includes legacy MIME variants", func(t *testing.T) {
+		assert.Equal(t, domain.MaterialFormatPDF, allowedMaterialFormats["application/x-pdf"])
+		assert.Equal(t, domain.MaterialFormatJPEG, allowedMaterialFormats["image/jpg"])
+	})
+
+	testCases := []struct {
+		name         string
+		filename     string
+		fileData     []byte
+		wantStatus   int
+		wantFormat   domain.MaterialFormatType
+		wantErr      string
+	}{
+		{
+			name:       "pdf canonical mime accepted",
+			filename:   "ok.pdf",
+			fileData:   []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\n"),
+			wantStatus: 0,
+			wantFormat: domain.MaterialFormatPDF,
+		},
+		{
+			name:       "pdf octet-stream accepted by extension",
+			filename:   "fallback.pdf",
+			fileData:   []byte{0x00, 0x01, 0x02, 0x03},
+			wantStatus: 0,
+			wantFormat: domain.MaterialFormatPDF,
+		},
+		{
+			name:       "jpg accepted",
+			filename:   "photo.jpg",
+			fileData:   []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46},
+			wantStatus: 0,
+			wantFormat: domain.MaterialFormatJPG,
+		},
+		{
+			name:       "unsupported extension returns 415",
+			filename:   "paper.docx",
+			fileData:   []byte("docx bytes"),
+			wantStatus: http.StatusUnsupportedMediaType,
+			wantErr:    "only PDF, TXT, MD, PNG, JPG, JPEG, WEBP, MP3, WAV and M4A files are accepted",
+		},
+		{
+			name:       "pdf with image bytes returns 415",
+			filename:   "fake.pdf",
+			fileData:   []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46},
+			wantStatus: http.StatusUnsupportedMediaType,
+			wantErr:    "file content does not match the .pdf extension",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotFormat, gotStatus, gotErr := validateMaterialFile(tc.filename, tc.fileData)
+			assert.Equal(t, tc.wantStatus, gotStatus)
+			assert.Equal(t, tc.wantErr, gotErr)
+			if tc.wantStatus == 0 {
+				assert.Equal(t, tc.wantFormat, gotFormat)
+			}
+		})
+	}
+}

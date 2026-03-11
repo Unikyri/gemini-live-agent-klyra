@@ -72,6 +72,26 @@ func (m *MockCourseRepository) UpdateAvatarStatus(ctx context.Context, courseID,
 	return errors.New("course not found")
 }
 
+func (m *MockCourseRepository) Update(ctx context.Context, course *domain.Course) error {
+	_ = ctx
+	if course == nil {
+		return errors.New("course is nil")
+	}
+	m.courses[course.ID.String()] = course
+	return nil
+}
+
+func (m *MockCourseRepository) SoftDelete(ctx context.Context, id string) error {
+	_ = ctx
+	course, ok := m.courses[id]
+	if !ok {
+		return nil
+	}
+	now := course.UpdatedAt
+	course.DeletedAt = &now
+	return nil
+}
+
 // MockStorageService for testing
 type MockStorageService struct {
 	uploadFileFn func(ctx context.Context, userID, objectName string, data []byte, mimeType string) (string, error)
@@ -158,6 +178,30 @@ func (m *MockTopicRepository) UpsertSummaryCache(ctx context.Context, cache doma
 	_ = ctx
 	_ = cache
 	return nil
+}
+
+func (m *MockTopicRepository) Update(ctx context.Context, topic *domain.Topic) error {
+	_ = ctx
+	if topic == nil {
+		return errors.New("topic is nil")
+	}
+	m.topics[topic.ID.String()] = topic
+	return nil
+}
+
+func (m *MockTopicRepository) SoftDelete(ctx context.Context, id string) error {
+	_ = ctx
+	topic, ok := m.topics[id]
+	if !ok {
+		return nil
+	}
+	now := topic.UpdatedAt
+	topic.DeletedAt = &now
+	return nil
+}
+
+func (m *MockTopicRepository) FindByCourseForCascade(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	return m.FindByCourse(ctx, courseID)
 }
 
 // --- Course Use Case Tests ---

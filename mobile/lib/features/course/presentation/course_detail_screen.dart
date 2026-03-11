@@ -143,7 +143,24 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
               ),
             ),
           ),
-
+          // --- Global tutor button (visible without scroll) ---
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+              child: ElevatedButton.icon(
+                onPressed: () => context.push('/tutor/${course.id}'),
+                icon: const Icon(Icons.smart_toy_rounded, size: 24),
+                label: const Text('Hablar con el tutor'),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ),
           // --- Topics & Materials ---
           course.topics.isEmpty
               ? SliverFillRemaining(child: _buildEmptyTopics(theme, course))
@@ -284,10 +301,23 @@ class _TopicSection extends ConsumerWidget {
                   onSelected: (value) {
                     if (value == 'edit') _showEditTopicDialog(context, ref);
                     if (value == 'delete') _showDeleteTopicDialog(context, ref);
+                    if (value == 'tutor') {
+                      context.push('/tutor/$courseId/${topic.id}');
+                    }
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Editar título')),
-                    const PopupMenuItem(value: 'delete', child: Text('Eliminar tema')),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Editar título'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Eliminar tema'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'tutor',
+                      child: Text('Hablar de este tema'),
+                    ),
                   ],
                 ),
               ],
@@ -296,23 +326,6 @@ class _TopicSection extends ConsumerWidget {
               courseId: courseId,
               topicId: topic.id,
               topicTitle: topic.title,
-            ),
-            const SizedBox(height: 16),
-            // Start Tutor Session button — navigates to TutorSessionScreen
-            OutlinedButton.icon(
-              onPressed: () =>
-                  context.push('/course/$courseId/topic/${topic.id}/summary'),
-              icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: const Text('Review Summary & Start'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.colorScheme.primary,
-                side: BorderSide(
-                  color: theme.colorScheme.primary.withOpacity(0.6),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
           ],
         ),
