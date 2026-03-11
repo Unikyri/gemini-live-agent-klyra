@@ -15,6 +15,8 @@ type CourseRepository interface {
 	FindAllByUser(ctx context.Context, userID string) ([]domain.Course, error)
 	// UpdateAvatarStatus updates avatar URL & status after async generation.
 	UpdateAvatarStatus(ctx context.Context, courseID, status, avatarURL string) error
+	Update(ctx context.Context, course *domain.Course) error
+	SoftDelete(ctx context.Context, id string) error
 }
 
 // TopicRepository defines persistence operations for Topics.
@@ -24,6 +26,9 @@ type TopicRepository interface {
 	FindByCourse(ctx context.Context, courseID string) ([]domain.Topic, error)
 	GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error)
 	UpsertSummaryCache(ctx context.Context, cache domain.TopicSummaryCache) error
+	Update(ctx context.Context, topic *domain.Topic) error
+	SoftDelete(ctx context.Context, id string) error
+	FindByCourseForCascade(ctx context.Context, courseID string) ([]domain.Topic, error)
 }
 
 // StorageService defines the contract for file storage (Cloud Storage).

@@ -38,8 +38,13 @@ class GeminiLiveService {
 
   GeminiLiveService(this._apiKey);
 
-  /// Connect to Gemini Live and send the initial setup with context.
-  Future<void> connect(String systemContext) async {
+  /// Connect to Gemini Live and send the initial setup (no RAG context — use sendContextUpdate to inject later).
+  /// [topicTitles] is the list of topic titles for the course; used to build a short prompt asking the student to choose a topic.
+  Future<void> connect({
+    String? courseName,
+    String? educationLevel,
+    List<String> topicTitles = const [],
+  }) async {
     _stateController.add(SessionState.connecting);
     _audioOutputController = StreamController<Uint8List>.broadcast();
 
@@ -48,13 +53,19 @@ class GeminiLiveService {
       _channel = WebSocketChannel.connect(uri);
       await _channel!.ready;
 
-      // Send setup message with model and system instruction (RAG context injected here)
+      final systemPrompt = _buildSystemPrompt(
+        courseName: courseName,
+        educationLevel: educationLevel,
+        topicTitles: topicTitles,
+      );
+
+      // Send setup message with model and system instruction (no chunks — context loaded on demand)
       final setup = {
         'setup': {
           'model': _model,
           'system_instruction': {
             'parts': [
-              {'text': _buildSystemPrompt(systemContext)}
+              {'text': systemPrompt}
             ]
           },
           'generation_config': {
@@ -88,6 +99,21 @@ class GeminiLiveService {
       _stateController.add(SessionState.error);
       rethrow;
     }
+  }
+
+  /// Sends a context update to the active session (e.g. after the user selects a topic).
+  /// The text is sent as client_content so the model can use it as reference.
+  void sendContextUpdate(String contextText) {
+    if (_channel == null) return;
+    final message = {
+      'clientContent': {
+        'parts': [
+          {'text': '[CONTEXTO DEL TEMA SELECCIONADO]\n$contextText'}
+        ],
+        'turnComplete': true,
+      }
+    };
+    _channel!.sink.add(jsonEncode(message));
   }
 
   /// Send a raw PCM audio chunk from the microphone to Gemini.
@@ -154,15 +180,32 @@ class GeminiLiveService {
     }
   }
 
-  String _buildSystemPrompt(String context) {
-    final contextSection = context.isNotEmpty
-        ? '\n\nUse the following course material as context for your explanations:\n---\n$context\n---'
-        : '';
+  String _buildSystemPrompt({
+    String? courseName,
+    String? educationLevel,
+    List<String> topicTitles = const [],
+  }) {
+    final courseLine = (courseName != null && courseName.isNotEmpty)
+        ? 'This course is "$courseName"'
+        : 'This is a course';
+    final levelLine = (educationLevel != null && educationLevel.isNotEmpty)
+        ? ' (level: $educationLevel).'
+        : '.';
+    final topicList = topicTitles.isNotEmpty
+        ? topicTitles.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n')
+        : '(none)';
     return '''You are Klyra, an enthusiastic, patient, and encouraging AI tutor.
 Your goal is to help the student understand their course material through natural conversation.
 Speak clearly and at an appropriate pace.
 Ask questions to check understanding.
-Celebrate correct answers and gently correct mistakes.$contextSection''';
+Celebrate correct answers and gently correct mistakes.
+
+$courseLine$levelLine
+Available topics in this course:
+$topicList
+
+Ask the student which topic they want to discuss. When they choose one, you will receive the relevant context.
+Until then, you can discuss the course structure and help them choose a topic.''';
   }
 
   /// Disconnect from Gemini Live and clean up resources.

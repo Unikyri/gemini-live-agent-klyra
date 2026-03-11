@@ -35,4 +35,38 @@ class CourseController extends _$CourseController {
       return _fetchCourses();
     });
   }
+
+  Future<void> updateCourse(String courseId, {String? name, String? educationLevel}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(courseRepositoryProvider);
+      await repo.updateCourse(courseId, name: name, educationLevel: educationLevel);
+      return _fetchCourses();
+    });
+  }
+
+  Future<void> deleteCourse(String courseId) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(courseRepositoryProvider);
+      await repo.deleteCourse(courseId);
+      return _fetchCourses();
+    });
+  }
+
+  Future<void> updateTopic(String courseId, String topicId, {String? title}) async {
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(courseRepositoryProvider);
+      await repo.updateTopic(courseId, topicId, title: title);
+      return _fetchCourses();
+    });
+  }
+
+  Future<void> deleteTopic(String courseId, String topicId) async {
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(courseRepositoryProvider);
+      await repo.deleteTopic(courseId, topicId);
+      return _fetchCourses();
+    });
+  }
 }

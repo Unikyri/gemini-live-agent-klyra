@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/usecases"
@@ -78,6 +79,10 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 	userID := userIDVal.(string)
 	courseID := c.Param("course_id")
 	topicID := c.Param("topic_id")
+	if _, err := uuid.Parse(topicID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course or topic not found"})
+		return
+	}
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
@@ -117,14 +122,24 @@ func (h *MaterialHandler) UploadMaterial(c *gin.Context) {
 
 	// Validate MIME and extension compatibility.
 	detectedMIME := http.DetectContentType(fileData)
+	// Normalize MIME by stripping optional parameters (e.g. "text/plain; charset=utf-8").
+	if i := strings.IndexByte(detectedMIME, ';'); i >= 0 {
+		detectedMIME = strings.TrimSpace(detectedMIME[:i])
+	}
 	if formatType == domain.MaterialFormatPDF && detectedMIME != "application/pdf" {
 		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "file content does not match the .pdf extension"})
 		return
 	}
 	if formatType != domain.MaterialFormatMD {
+		// Some clients/platforms may label small text uploads as application/octet-stream.
+		// Since we already validated the extension, allow octet-stream for plain text.
+		if formatType == domain.MaterialFormatTXT && detectedMIME == "application/octet-stream" {
+			// ok
+		} else {
 		if _, ok := allowedMaterialFormats[detectedMIME]; !ok {
 			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "unsupported file MIME type"})
 			return
+		}
 		}
 	}
 
@@ -165,6 +180,10 @@ func (h *MaterialHandler) ListMaterials(c *gin.Context) {
 	userID := userIDVal.(string)
 	courseID := c.Param("course_id")
 	topicID := c.Param("topic_id")
+	if _, err := uuid.Parse(topicID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course or topic not found"})
+		return
+	}
 
 	materials, err := h.materialUseCase.GetMaterialsByTopic(c.Request.Context(), courseID, topicID, userID)
 	if errors.Is(err, usecases.ErrMaterialForbidden) {

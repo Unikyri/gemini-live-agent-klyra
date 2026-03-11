@@ -87,13 +87,13 @@ class CourseDashboardScreen extends ConsumerWidget {
   }
 }
 
-class _CourseCard extends StatelessWidget {
+class _CourseCard extends ConsumerWidget {
   final Course course;
 
   const _CourseCard({required this.course});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     
     // Status visual logic
@@ -190,7 +190,19 @@ class _CourseCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'edit') _showEditCourseDialog(context, ref);
+                        if (value == 'delete') _showDeleteCourseDialog(context, ref);
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'edit', child: Text('Editar nombre')),
+                        const PopupMenuItem(value: 'delete', child: Text('Eliminar curso')),
+                      ],
+                    ),
+                    const SizedBox(width: 8),
                     // Status Badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -220,6 +232,79 @@ class _CourseCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showEditCourseDialog(BuildContext context, WidgetRef ref) {
+    final nameController = TextEditingController(text: course.name);
+    String selectedLevel = course.educationLevel;
+    const levels = ['elementary', 'middle_school', 'high_school', 'university', 'postgraduate', 'other'];
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Editar nombre'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Nombre del curso'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedLevel,
+                  decoration: const InputDecoration(labelText: 'Nivel educativo'),
+                  items: levels.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
+                  onChanged: (v) => setState(() => selectedLevel = v ?? selectedLevel),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(ctx);
+                await ref.read(courseControllerProvider.notifier).updateCourse(
+                  course.id,
+                  name: name,
+                  educationLevel: selectedLevel,
+                );
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteCourseDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar curso?'),
+        content: Text(
+          'Se eliminará el curso «${course.name}» y todos sus temas, materiales y contenido asociado. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(courseControllerProvider.notifier).deleteCourse(course.id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }

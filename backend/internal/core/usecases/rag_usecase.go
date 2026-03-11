@@ -24,12 +24,17 @@ const (
 	maxChunksPerMaterial = 50
 	// minChunkLen skips chunks that are too short to be meaningful.
 	minChunkLen = 20
+	// maxChunksPerTopic limits chunks per topic when building course context (no query).
+	maxChunksPerTopic = 3
+	// maxCourseChunks is the total chunk limit for course context (no query).
+	maxCourseChunks = 30
 )
 
 // RAGUseCase orchestrates the text chunking, embedding, and retrieval pipeline.
 type RAGUseCase struct {
 	materialRepo ports.MaterialRepository
 	chunkRepo    ports.ChunkRepository
+	topicRepo    ports.TopicRepository
 	embedder     ports.Embedder
 }
 
@@ -42,6 +47,21 @@ func NewRAGUseCase(
 	return &RAGUseCase{
 		materialRepo: materialRepo,
 		chunkRepo:    chunkRepo,
+		embedder:     embedder,
+	}
+}
+
+// NewRAGUseCaseWithTopicRepo constructs RAGUseCase with topic repo (for GetCourseContext).
+func NewRAGUseCaseWithTopicRepo(
+	materialRepo ports.MaterialRepository,
+	chunkRepo ports.ChunkRepository,
+	topicRepo ports.TopicRepository,
+	embedder ports.Embedder,
+) *RAGUseCase {
+	return &RAGUseCase{
+		materialRepo: materialRepo,
+		chunkRepo:    chunkRepo,
+		topicRepo:    topicRepo,
 		embedder:     embedder,
 	}
 }
@@ -77,20 +97,24 @@ func (uc *RAGUseCase) ProcessMaterialChunks(ctx context.Context, materialID stri
 		if utf8.RuneCountInString(text) < minChunkLen {
 			continue
 		}
-		embedding, err := uc.embedder.Embed(ctx, text)
-		if err != nil {
-			// Log but don't fail all chunks because of a single API error.
-			log.Printf("[RAG] Failed to embed chunk %d for material %s: %v", i, materialID, err)
-			continue
-		}
 		domainChunks = append(domainChunks, domain.MaterialChunk{
 			ID:         uuid.New(),
 			MaterialID: mID,
 			TopicID:    tID,
 			ChunkIndex: i,
 			Content:    text,
-			Embedding:  domain.PgVector(embedding),
 		})
+
+		// Only add embeddings when the embedder is configured.
+		if uc.embedder != nil {
+			embedding, err := uc.embedder.Embed(ctx, text)
+			if err != nil {
+				// Log but don't fail all chunks because of a single API error.
+				log.Printf("[RAG] Failed to embed chunk %d for material %s: %v", i, materialID, err)
+			} else {
+				domainChunks[len(domainChunks)-1].Embedding = domain.PgVector(embedding)
+			}
+		}
 	}
 
 	if err := uc.chunkRepo.SaveChunks(ctx, domainChunks); err != nil {
@@ -110,6 +134,25 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		chunks, err := uc.chunkRepo.GetChunksByTopic(ctx, topicID)
 		if err != nil {
 			return "", fmt.Errorf("rag: get topic context: %w", err)
+		}
+		if len(chunks) == 0 {
+			return "Aún no hay material validado para este tema. Sube material de estudio para generar contexto.", nil
+		}
+		parts := make([]string, len(chunks))
+		for i, c := range chunks {
+			parts[i] = c.Content
+		}
+		return strings.Join(parts, "\n\n"), nil
+	}
+
+	// In local/dev environments embeddings may be disabled. Fallback to full topic context.
+	if uc.embedder == nil {
+		chunks, err := uc.chunkRepo.GetChunksByTopic(ctx, topicID)
+		if err != nil {
+			return "", fmt.Errorf("rag: get topic context: %w", err)
+		}
+		if len(chunks) == 0 {
+			return "Aún no hay material validado para este tema. Sube material de estudio para generar contexto.", nil
 		}
 		parts := make([]string, len(chunks))
 		for i, c := range chunks {
@@ -135,6 +178,137 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		sb.WriteString("\n\n")
 	}
 	return sb.String(), nil
+}
+
+// GetCourseContext returns context for the whole course: either truncated top-N per topic (no query)
+// or similarity search across course (with query). Result is grouped by topic with "### <title>" headers.
+// Returns (context, truncated, error). truncated is true when chunks were capped.
+func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query string) (contextText string, truncated bool, err error) {
+	if uc.topicRepo == nil {
+		return "", false, fmt.Errorf("rag: topic repo required for GetCourseContext")
+	}
+
+	topics, err := uc.topicRepo.FindByCourse(ctx, courseID)
+	if err != nil {
+		return "", false, fmt.Errorf("rag: find topics: %w", err)
+	}
+	topicTitles := make(map[string]string)
+	for _, t := range topics {
+		topicTitles[t.ID.String()] = t.Title
+	}
+
+	// If embeddings are disabled, fallback to the non-query path.
+	if query != "" && uc.embedder != nil {
+		queryEmbedding, err := uc.embedder.Embed(ctx, query)
+		if err != nil {
+			return "", false, fmt.Errorf("rag: embed query: %w", err)
+		}
+		results, err := uc.chunkRepo.SearchSimilarByCourse(ctx, courseID, queryEmbedding, 10)
+		if err != nil {
+			return "", false, fmt.Errorf("rag: search similar by course: %w", err)
+		}
+		truncated = true
+		return buildCourseContextFromResults(results, topicTitles), truncated, nil
+	}
+
+	chunks, err := uc.chunkRepo.GetChunksByCourse(ctx, courseID)
+	if err != nil {
+		return "", false, fmt.Errorf("rag: get chunks by course: %w", err)
+	}
+	if len(chunks) == 0 {
+		return "Aún no hay material validado para este curso. Sube material de estudio en algún tema para generar contexto.", false, nil
+	}
+
+	// Group by topic_id, take first maxChunksPerTopic per topic, cap total at maxCourseChunks.
+	byTopic := make(map[string][]domain.MaterialChunk)
+	for _, c := range chunks {
+		tid := c.TopicID.String()
+		byTopic[tid] = append(byTopic[tid], c)
+	}
+
+	var selected []domain.MaterialChunk
+	perTopic := maxChunksPerTopic
+	remaining := maxCourseChunks
+	for _, tid := range orderedTopicIDs(chunks) {
+		list := byTopic[tid]
+		n := perTopic
+		if n > len(list) {
+			n = len(list)
+		}
+		if n > remaining {
+			n = remaining
+		}
+		if n > 0 {
+			selected = append(selected, list[:n]...)
+			remaining -= n
+			if remaining <= 0 {
+				break
+			}
+		}
+	}
+	truncated = len(selected) < len(chunks)
+	return buildCourseContextFromChunks(selected, topicTitles), truncated, nil
+}
+
+func orderedTopicIDs(chunks []domain.MaterialChunk) []string {
+	seen := make(map[string]struct{})
+	var order []string
+	for _, c := range chunks {
+		tid := c.TopicID.String()
+		if _, ok := seen[tid]; !ok {
+			seen[tid] = struct{}{}
+			order = append(order, tid)
+		}
+	}
+	return order
+}
+
+func buildCourseContextFromChunks(chunks []domain.MaterialChunk, topicTitles map[string]string) string {
+	var sb strings.Builder
+	var lastTopicID string
+	for _, c := range chunks {
+		tid := c.TopicID.String()
+		if tid != lastTopicID {
+			if lastTopicID != "" {
+				sb.WriteString("\n\n")
+			}
+			title := topicTitles[tid]
+			if title == "" {
+				title = tid
+			}
+			sb.WriteString("### ")
+			sb.WriteString(title)
+			sb.WriteString("\n\n")
+			lastTopicID = tid
+		}
+		sb.WriteString(c.Content)
+		sb.WriteString("\n\n")
+	}
+	return strings.TrimSuffix(sb.String(), "\n\n")
+}
+
+func buildCourseContextFromResults(results []domain.RAGResult, topicTitles map[string]string) string {
+	var sb strings.Builder
+	var lastTopicID string
+	for _, r := range results {
+		tid := r.Chunk.TopicID.String()
+		if tid != lastTopicID {
+			if lastTopicID != "" {
+				sb.WriteString("\n\n")
+			}
+			title := topicTitles[tid]
+			if title == "" {
+				title = tid
+			}
+			sb.WriteString("### ")
+			sb.WriteString(title)
+			sb.WriteString("\n\n")
+			lastTopicID = tid
+		}
+		sb.WriteString(r.Chunk.Content)
+		sb.WriteString("\n\n")
+	}
+	return strings.TrimSuffix(sb.String(), "\n\n")
 }
 
 // -- chunkText splits text into overlapping rune-based windows --

@@ -70,7 +70,10 @@ func (r *MaterialRepository) FindByTopic(ctx context.Context, topicID string) ([
 		return nil, fmt.Errorf("invalid topic id: %w", err)
 	}
 	var materials []domain.Material
-	result := r.db.WithContext(ctx).Where("topic_id = ?", parsedTopicID).Order("created_at DESC").Find(&materials)
+	result := r.db.WithContext(ctx).
+		Where("topic_id = ? AND deleted_at IS NULL", parsedTopicID).
+		Order("created_at DESC").
+		Find(&materials)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to find materials by topic: %w", result.Error)
 	}
@@ -146,6 +149,30 @@ func (r *MaterialRepository) UpdateStatus(ctx context.Context, materialID string
 	result := r.db.WithContext(ctx).Model(&domain.Material{}).Where("id = ?", materialID).Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update material status: %w", result.Error)
+	}
+	return nil
+}
+
+// SoftDeleteByTopicIDs marks all materials for the given topic IDs as deleted.
+func (r *MaterialRepository) SoftDeleteByTopicIDs(ctx context.Context, topicIDs []string) error {
+	if len(topicIDs) == 0 {
+		return nil
+	}
+	uuids := make([]uuid.UUID, 0, len(topicIDs))
+	for _, id := range topicIDs {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return fmt.Errorf("invalid topic id %q: %w", id, err)
+		}
+		uuids = append(uuids, parsed)
+	}
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&domain.Material{}).
+		Where("topic_id IN ?", uuids).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", now)
+	if result.Error != nil {
+		return fmt.Errorf("failed to soft delete materials by topic IDs: %w", result.Error)
 	}
 	return nil
 }

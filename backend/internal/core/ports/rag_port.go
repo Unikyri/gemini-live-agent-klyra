@@ -27,4 +27,11 @@ type ChunkRepository interface {
 
 	// GetChunksByTopic retrieves all chunks for a topic (for full context build).
 	GetChunksByTopic(ctx context.Context, topicID string) ([]domain.MaterialChunk, error)
+
+	// GetChunksByCourse retrieves all chunks for a course (JOIN topics), only non-deleted topics.
+	GetChunksByCourse(ctx context.Context, courseID string) ([]domain.MaterialChunk, error)
+	// SearchSimilarByCourse performs similarity search across all chunks of a course.
+	SearchSimilarByCourse(ctx context.Context, courseID string, queryEmbedding []float32, topK int) ([]domain.RAGResult, error)
+	// HardDeleteByTopicIDs deletes all chunks for the given topic IDs (cascade; chunks are derived data).
+	HardDeleteByTopicIDs(ctx context.Context, topicIDs []string) error
 }

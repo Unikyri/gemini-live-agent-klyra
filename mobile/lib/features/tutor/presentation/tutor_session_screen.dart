@@ -9,12 +9,12 @@ import 'package:klyra/features/tutor/presentation/tutor_session_controller.dart'
 
 class TutorSessionScreen extends ConsumerStatefulWidget {
   final String courseId;
-  final String topicId;
+  final String? topicId;
 
   const TutorSessionScreen({
     super.key,
     required this.courseId,
-    required this.topicId,
+    this.topicId,
   });
 
   @override
@@ -59,9 +59,9 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
     final Course? course = coursesAsync.whenOrNull(data: (d) => d)
         ?.where((c) => c.id == widget.courseId)
         .firstOrNull;
-    final Topic? topic = course?.topics
-        .where((t) => t.id == widget.topicId)
-        .firstOrNull;
+    final Topic? topic = widget.topicId != null && course != null
+        ? course.topics.where((t) => t.id == widget.topicId).firstOrNull
+        : null;
 
     final bool isActive = sessionState.sessionState == SessionState.active ||
         sessionState.sessionState == SessionState.speaking;
@@ -100,6 +100,49 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
       body: SafeArea(
         child: Column(
           children: [
+            // --- Topic selector (chips) and "Curso completo" ---
+            if (course != null && course!.topics.isNotEmpty && isActive) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          label: const Text('Curso completo'),
+                          onPressed: sessionState.isLoadingContext
+                              ? null
+                              : () => ref
+                                  .read(tutorSessionControllerProvider.notifier)
+                                  .loadCourseContext(widget.courseId),
+                        ),
+                      ),
+                      ...course!.topics.map((t) {
+                        final isSelected =
+                            sessionState.currentTopicId == t.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text(t.title),
+                            selected: isSelected,
+                            onSelected: sessionState.isLoadingContext
+                                ? null
+                                : (_) => ref
+                                    .read(tutorSessionControllerProvider.notifier)
+                                    .loadTopicContext(widget.courseId, t.id),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              if (sessionState.isLoadingContext)
+                const LinearProgressIndicator(color: Color(0xFF6C63FF)),
+            ],
+
             // --- Avatar Display Area ---
             Expanded(
               flex: 6,
@@ -148,7 +191,7 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
                 isMicOn: sessionState.isMicrophoneActive,
                 onStart: () => ref
                     .read(tutorSessionControllerProvider.notifier)
-                    .startSession(widget.courseId, widget.topicId),
+                    .startSession(widget.courseId, topicId: widget.topicId),
                 onStop: () => ref
                     .read(tutorSessionControllerProvider.notifier)
                     .stopSession(),

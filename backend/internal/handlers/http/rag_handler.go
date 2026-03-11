@@ -3,6 +3,7 @@ package http
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,7 +12,8 @@ import (
 
 // RAGHandler exposes a context-retrieval endpoint used by the mobile Tutor session.
 type RAGHandler struct {
-	ragUseCase *usecases.RAGUseCase
+	ragUseCase    *usecases.RAGUseCase
+	courseUseCase *usecases.CourseUseCase
 }
 
 // NewRAGHandler creates a RAGHandler.
@@ -19,10 +21,16 @@ func NewRAGHandler(ragUseCase *usecases.RAGUseCase) *RAGHandler {
 	return &RAGHandler{ragUseCase: ragUseCase}
 }
 
+// NewRAGHandlerWithCourseUseCase creates a RAGHandler with course use case for ownership validation.
+func NewRAGHandlerWithCourseUseCase(ragUseCase *usecases.RAGUseCase, courseUseCase *usecases.CourseUseCase) *RAGHandler {
+	return &RAGHandler{ragUseCase: ragUseCase, courseUseCase: courseUseCase}
+}
+
 // RegisterRoutes attaches RAG routes to the protected router group.
 func (h *RAGHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	// GET context for a full topic (no query) or a query-specific retrieval
 	rg.GET("/courses/:course_id/topics/:topic_id/context", h.GetTopicContext)
+	rg.GET("/courses/:course_id/context", h.GetCourseContext)
 }
 
 // GetTopicContext handles GET /api/v1/courses/:course_id/topics/:topic_id/context
@@ -39,10 +47,41 @@ func (h *RAGHandler) GetTopicContext(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	_ = userIDVal // Future: validate topic belongs to this user's course
+	userID := userIDVal.(string)
 
+	courseID := c.Param("course_id")
 	topicID := c.Param("topic_id")
 	query := c.Query("query") // Optional: if empty, returns full topic context
+
+	// Validate course ownership/existence and ensure topic belongs to course and is not deleted.
+	if h.courseUseCase != nil {
+		course, err := h.courseUseCase.GetCourseByID(c.Request.Context(), courseID, userID)
+		if err != nil {
+			if err == usecases.ErrCourseForbidden {
+				c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+				return
+			}
+			log.Printf("[RAG] GetTopicContext GetCourseByID error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
+			return
+		}
+		if course == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+			return
+		}
+
+		found := false
+		for _, t := range course.Topics {
+			if strings.EqualFold(t.ID.String(), topicID) && t.DeletedAt == nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusNotFound, gin.H{"error": "topic not found"})
+			return
+		}
+	}
 
 	context, err := h.ragUseCase.GetTopicContext(c.Request.Context(), topicID, query)
 	if err != nil {
@@ -55,5 +94,54 @@ func (h *RAGHandler) GetTopicContext(c *gin.Context) {
 		"topic_id": topicID,
 		"context":  context,
 		"query":    query,
+	})
+}
+
+// GetCourseContext handles GET /api/v1/courses/:course_id/context
+// Optional query param: ?query=<text> for similarity search. Without query returns truncated course context.
+// Validates course ownership before returning context.
+func (h *RAGHandler) GetCourseContext(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+	courseID := c.Param("course_id")
+	query := c.Query("query")
+
+	if h.courseUseCase == nil {
+		log.Printf("[RAG] GetCourseContext: course use case not set")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
+		return
+	}
+
+	course, err := h.courseUseCase.GetCourseByID(c.Request.Context(), courseID, userID)
+	if err != nil {
+		if err == usecases.ErrCourseForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		log.Printf("[RAG] GetCourseContext GetCourseByID error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
+		return
+	}
+	if course == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+		return
+	}
+
+	contextText, truncated, err := h.ragUseCase.GetCourseContext(c.Request.Context(), courseID, query)
+	if err != nil {
+		log.Printf("[RAG] GetCourseContext error for course %s: %v", courseID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve context"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course_id": courseID,
+		"context":   contextText,
+		"query":     query,
+		"truncated": truncated,
 	})
 }

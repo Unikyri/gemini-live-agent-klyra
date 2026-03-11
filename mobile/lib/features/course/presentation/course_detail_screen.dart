@@ -250,14 +250,14 @@ class _CourseDetailViewState extends ConsumerState<_CourseDetailView>
   }
 }
 
-class _TopicSection extends StatelessWidget {
+class _TopicSection extends ConsumerWidget {
   final String courseId;
   final Topic topic;
 
   const _TopicSection({required this.courseId, required this.topic});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Card(
       color: theme.colorScheme.surface,
@@ -271,6 +271,27 @@ class _TopicSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    topic.title,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'edit') _showEditTopicDialog(context, ref);
+                    if (value == 'delete') _showDeleteTopicDialog(context, ref);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Editar título')),
+                    const PopupMenuItem(value: 'delete', child: Text('Eliminar tema')),
+                  ],
+                ),
+              ],
+            ),
             MaterialListView(
               courseId: courseId,
               topicId: topic.id,
@@ -295,6 +316,56 @@ class _TopicSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditTopicDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController(text: topic.title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar título'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Título del tema'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              final title = controller.text.trim();
+              if (title.isEmpty) return;
+              Navigator.pop(ctx);
+              await ref.read(courseControllerProvider.notifier).updateTopic(courseId, topic.id, title: title);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteTopicDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar tema?'),
+        content: Text(
+          'Se eliminará el tema «${topic.title}» y todo su material asociado. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(courseControllerProvider.notifier).deleteTopic(courseId, topic.id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }

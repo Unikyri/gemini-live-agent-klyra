@@ -70,6 +70,40 @@ func (r *TopicRepository) FindByCourse(ctx context.Context, courseID string) ([]
 	return out, nil
 }
 
+// Update implements ports.TopicRepository.
+func (r *TopicRepository) Update(ctx context.Context, topic *domain.Topic) error {
+	topic.UpdatedAt = time.Now()
+	result := r.db.WithContext(ctx).Model(topic).Updates(topic)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update topic: %w", result.Error)
+	}
+	return nil
+}
+
+// SoftDelete marks the topic as deleted (sets deleted_at).
+func (r *TopicRepository) SoftDelete(ctx context.Context, id string) error {
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&domain.Topic{}).Where("id = ?", id).Update("deleted_at", now)
+	if result.Error != nil {
+		return fmt.Errorf("failed to soft delete topic: %w", result.Error)
+	}
+	return nil
+}
+
+// FindByCourseForCascade returns all topics for a course including soft-deleted (for cascade delete).
+func (r *TopicRepository) FindByCourseForCascade(ctx context.Context, courseID string) ([]domain.Topic, error) {
+	parsedCourseID, err := uuid.Parse(courseID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid course id: %w", err)
+	}
+	var topics []domain.Topic
+	err = r.db.WithContext(ctx).Unscoped().Where("course_id = ?", parsedCourseID).Order("order_index ASC").Find(&topics).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to find topics for cascade: %w", err)
+	}
+	return topics, nil
+}
+
 // GetSummaryCache implements ports.TopicRepository.
 func (r *TopicRepository) GetSummaryCache(ctx context.Context, topicID string) (*domain.TopicSummaryCache, error) {
 	topic, err := r.FindByID(ctx, topicID)
@@ -152,12 +186,12 @@ func (r *TopicRepository) GetTopicByID(topicID uuid.UUID) (*domain.Topic, error)
 	return &topic, nil
 }
 
-// GetTopicsByCourse retrieves all topics for a course, ordered by sequence.
+// GetTopicsByCourse retrieves all topics for a course, ordered by order_index.
 func (r *TopicRepository) GetTopicsByCourse(courseID uuid.UUID) ([]*domain.Topic, error) {
 	var topics []*domain.Topic
 	result := r.db.
 		Where("course_id = ?", courseID).
-		Order("sequence ASC").
+		Order("order_index ASC").
 		Find(&topics)
 
 	if result.Error != nil {

@@ -230,11 +230,100 @@ func (r *ChunkRepository) SearchSimilar(ctx context.Context, topicID string, que
 func (r *ChunkRepository) GetChunksByTopic(ctx context.Context, topicID string) ([]domain.MaterialChunk, error) {
 	var chunks []domain.MaterialChunk
 	err := r.db.WithContext(ctx).
-		Where("topic_id = ?", topicID).
+		Table("material_chunks mc").
+		Select("mc.*").
+		Joins("JOIN topics t ON mc.topic_id = t.id").
+		Where("mc.topic_id = ? AND t.deleted_at IS NULL", topicID).
 		Order("chunk_index ASC").
 		Find(&chunks).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chunks by topic: %w", err)
 	}
 	return chunks, nil
+}
+
+// GetChunksByCourse implements ports.ChunkRepository.
+// Returns chunks only from topics that are not soft-deleted, ordered by topic order_index and chunk_index.
+func (r *ChunkRepository) GetChunksByCourse(ctx context.Context, courseID string) ([]domain.MaterialChunk, error) {
+	var chunks []domain.MaterialChunk
+	err := r.db.WithContext(ctx).
+		Table("material_chunks").
+		Select("material_chunks.*").
+		Joins("JOIN topics t ON material_chunks.topic_id = t.id").
+		Where("t.course_id = ? AND t.deleted_at IS NULL", courseID).
+		Order("t.order_index ASC, material_chunks.chunk_index ASC").
+		Find(&chunks).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chunks by course: %w", err)
+	}
+	return chunks, nil
+}
+
+// SearchSimilarByCourse implements ports.ChunkRepository.
+// Returns topK chunks most similar to queryEmbedding, scoped to the given course (non-deleted topics only).
+func (r *ChunkRepository) SearchSimilarByCourse(ctx context.Context, courseID string, queryEmbedding []float32, topK int) ([]domain.RAGResult, error) {
+	if len(queryEmbedding) == 0 {
+		return nil, fmt.Errorf("empty query embedding")
+	}
+	if topK <= 0 {
+		topK = 10
+	}
+
+	q := domain.PgVectorToLiteral(queryEmbedding)
+	var rows []struct {
+		ID         uuid.UUID
+		MaterialID uuid.UUID
+		TopicID    uuid.UUID
+		ChunkIndex int
+		Content    string
+		Similarity float64
+	}
+
+	err := r.db.WithContext(ctx).
+		Table("material_chunks mc").
+		Select("mc.id, mc.material_id, mc.topic_id, mc.chunk_index, mc.content, 1 - (mc.embedding <=> ?) as similarity", q).
+		Joins("JOIN topics t ON mc.topic_id = t.id").
+		Where("t.course_id = ?", courseID).
+		Where("t.deleted_at IS NULL").
+		Order(gorm.Expr("mc.embedding <=> ?", q)).
+		Limit(topK).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("search similar by course failed: %w", err)
+	}
+
+	out := make([]domain.RAGResult, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.RAGResult{
+			Chunk: domain.MaterialChunk{
+				ID:         row.ID,
+				MaterialID: row.MaterialID,
+				TopicID:    row.TopicID,
+				ChunkIndex: row.ChunkIndex,
+				Content:    row.Content,
+			},
+			Similarity: row.Similarity,
+		})
+	}
+	return out, nil
+}
+
+// HardDeleteByTopicIDs deletes all chunks for the given topic IDs (cascade; no soft delete on chunks).
+func (r *ChunkRepository) HardDeleteByTopicIDs(ctx context.Context, topicIDs []string) error {
+	if len(topicIDs) == 0 {
+		return nil
+	}
+	uuids := make([]uuid.UUID, 0, len(topicIDs))
+	for _, id := range topicIDs {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return fmt.Errorf("invalid topic id %q: %w", id, err)
+		}
+		uuids = append(uuids, parsed)
+	}
+	result := r.db.WithContext(ctx).Unscoped().Where("topic_id IN ?", uuids).Delete(&domain.MaterialChunk{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to hard delete chunks by topic IDs: %w", result.Error)
+	}
+	return nil
 }

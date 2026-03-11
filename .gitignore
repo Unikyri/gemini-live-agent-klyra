@@ -55,3 +55,11 @@ build/
 .vscode/
 *.iml
 *.swp
+
+# TestSprite (generated artifacts)
+testsprite_tests/tmp/
+testsprite_tests/*.py
+testsprite_tests/*.html
+!testsprite_tests/testsprite-mcp-test-report.md
+
+# OpenSpec (should be tracked)

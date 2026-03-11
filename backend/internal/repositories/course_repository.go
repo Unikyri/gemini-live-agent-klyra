@@ -30,6 +30,26 @@ func NewPostgresCourseRepository(db *gorm.DB) *CourseRepository {
 	return NewCourseRepository(db, nil)
 }
 
+// Update implements ports.CourseRepository.
+func (r *CourseRepository) Update(ctx context.Context, course *domain.Course) error {
+	course.UpdatedAt = time.Now()
+	result := r.db.WithContext(ctx).Model(course).Updates(course)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update course: %w", result.Error)
+	}
+	return nil
+}
+
+// SoftDelete marks the course as deleted (sets deleted_at).
+func (r *CourseRepository) SoftDelete(ctx context.Context, id string) error {
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&domain.Course{}).Where("id = ?", id).Update("deleted_at", now)
+	if result.Error != nil {
+		return fmt.Errorf("failed to soft delete course: %w", result.Error)
+	}
+	return nil
+}
+
 // Create implements ports.CourseRepository.
 func (r *CourseRepository) Create(ctx context.Context, course *domain.Course) error {
 	return r.CreateCourse(ctx, course)
@@ -103,9 +123,14 @@ func (r *CourseRepository) GetCourseByID(courseID uuid.UUID) (*domain.Course, er
 	var course domain.Course
 	result := r.db.
 		Preload("Topics", func(db *gorm.DB) *gorm.DB {
-			return db.Preload("Materials")
+			return db.
+				Where("deleted_at IS NULL").
+				Order("order_index ASC").
+				Preload("Materials", func(db2 *gorm.DB) *gorm.DB {
+					return db2.Where("deleted_at IS NULL")
+				})
 		}).
-		Where("id = ?", courseID).
+		Where("id = ? AND deleted_at IS NULL", courseID).
 		First(&course)
 
 	if result.Error != nil {
@@ -123,9 +148,14 @@ func (r *CourseRepository) GetCoursesByUser(userID uuid.UUID) ([]*domain.Course,
 	var courses []*domain.Course
 	result := r.db.
 		Preload("Topics", func(db *gorm.DB) *gorm.DB {
-			return db.Preload("Materials")
+			return db.
+				Where("deleted_at IS NULL").
+				Order("order_index ASC").
+				Preload("Materials", func(db2 *gorm.DB) *gorm.DB {
+					return db2.Where("deleted_at IS NULL")
+				})
 		}).
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND deleted_at IS NULL", userID).
 		Order("created_at DESC").
 		Find(&courses)
 

@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:klyra/core/network/dio_client.dart';
+import 'package:klyra/features/course/data/course_repository.dart';
 import 'package:klyra/features/tutor/data/gemini_live_service.dart';
 
 part 'tutor_session_controller.g.dart';
@@ -16,25 +16,37 @@ class TutorSessionState {
   final String transcript;
   final String? error;
   final bool isMicrophoneActive;
+  final String? currentTopicId;
+  final Set<String> loadedTopicIds;
+  final bool isLoadingContext;
 
   const TutorSessionState({
     this.sessionState = SessionState.idle,
     this.transcript = '',
     this.error,
     this.isMicrophoneActive = false,
-  });
+    this.currentTopicId,
+    Set<String>? loadedTopicIds,
+    this.isLoadingContext = false,
+  }) : loadedTopicIds = loadedTopicIds ?? const {};
 
   TutorSessionState copyWith({
     SessionState? sessionState,
     String? transcript,
     String? error,
     bool? isMicrophoneActive,
+    String? currentTopicId,
+    Set<String>? loadedTopicIds,
+    bool? isLoadingContext,
   }) {
     return TutorSessionState(
       sessionState: sessionState ?? this.sessionState,
       transcript: transcript ?? this.transcript,
       error: error,
       isMicrophoneActive: isMicrophoneActive ?? this.isMicrophoneActive,
+      currentTopicId: currentTopicId ?? this.currentTopicId,
+      loadedTopicIds: loadedTopicIds ?? this.loadedTopicIds,
+      isLoadingContext: isLoadingContext ?? this.isLoadingContext,
     );
   }
 }
@@ -71,9 +83,8 @@ class TutorSessionController extends _$TutorSessionController {
     return const TutorSessionState();
   }
 
-  /// Start a tutoring session for a given course topic.
-  Future<void> startSession(String courseId, String topicId) async {
-    // Guard: API key must be injected via --dart-define at build time
+  /// Start a tutoring session at course level. [topicId] is optional; if provided, that topic's context is loaded after connecting.
+  Future<void> startSession(String courseId, {String? topicId}) async {
     if (_geminiApiKey.isEmpty) {
       state = state.copyWith(
         sessionState: SessionState.error,
@@ -85,48 +96,32 @@ class TutorSessionController extends _$TutorSessionController {
     state = state.copyWith(sessionState: SessionState.connecting, error: null);
 
     try {
-      // Step 1: Fetch RAG context from our Go backend
-      final dio = ref.read(dioClientProvider);
+      final repo = ref.read(courseRepositoryProvider);
+      final course = await repo.getCourse(courseId);
+      final topicTitles = course.topics.map((t) => t.title).toList();
 
-      final readinessResponse = await dio.get(
-        '/courses/$courseId/topics/$topicId/readiness',
-      );
-      final isReady = (readinessResponse.data['is_ready'] as bool?) ?? false;
-      if (!isReady) {
-        final message =
-            (readinessResponse.data['message'] as String?) ??
-            'Upload and validate at least one material before tutoring.';
-        state = state.copyWith(
-          sessionState: SessionState.error,
-          error: message,
-        );
-        return;
-      }
-
-      final context = await _fetchContext(dio, courseId, topicId);
-
-      // Step 2: Subscribe to the GeminiLiveService streams
       _stateSub = _geminiService.stateStream.listen((s) {
         state = state.copyWith(sessionState: s);
       });
-
-      // Step 3: Play audio responses from Gemini
       _audioSub = _geminiService.audioOutputStream.listen((audioBytes) {
-        // audioplayers can play raw PCM bytes
         _player.play(BytesSource(audioBytes));
       });
-
-      // Step 4: Accumulate transcript text
       var fullTranscript = '';
       _transcriptSub = _geminiService.transcriptStream.listen((chunk) {
         fullTranscript += chunk;
         state = state.copyWith(transcript: fullTranscript);
       });
 
-      // Step 5: Connect to Gemini Live with the RAG context
-      await _geminiService.connect(context);
+      await _geminiService.connect(
+        courseName: course.name,
+        educationLevel: course.educationLevel,
+        topicTitles: topicTitles,
+      );
 
-      // Step 6: Start microphone streaming
+      if (topicId != null && topicId.isNotEmpty) {
+        await loadTopicContext(courseId, topicId);
+      }
+
       await _startMicrophone();
     } catch (e) {
       debugPrint('[TutorSession] startSession error: $e');
@@ -134,6 +129,48 @@ class TutorSessionController extends _$TutorSessionController {
         sessionState: SessionState.error,
         error: 'Could not start session. Please try again.',
       );
+    }
+  }
+
+  /// Load context for a specific topic and send it to the active Gemini session.
+  Future<void> loadTopicContext(String courseId, String topicId) async {
+    if (state.loadedTopicIds.contains(topicId)) {
+      return;
+    }
+    state = state.copyWith(isLoadingContext: true);
+    try {
+      final dio = ref.read(dioClientProvider);
+      final response = await dio.get(
+        '/courses/$courseId/topics/$topicId/context',
+      );
+      final contextText = (response.data['context'] as String?) ?? '';
+      _geminiService.sendContextUpdate(contextText);
+      state = state.copyWith(
+        currentTopicId: topicId,
+        loadedTopicIds: {...state.loadedTopicIds, topicId},
+        isLoadingContext: false,
+      );
+    } catch (e) {
+      debugPrint('[TutorSession] loadTopicContext error: $e');
+      state = state.copyWith(isLoadingContext: false);
+    }
+  }
+
+  /// Load course-level (truncated) context and send it to the active Gemini session.
+  Future<void> loadCourseContext(String courseId) async {
+    state = state.copyWith(isLoadingContext: true);
+    try {
+      final repo = ref.read(courseRepositoryProvider);
+      final data = await repo.fetchCourseContext(courseId);
+      final contextText = (data['context'] as String?) ?? '';
+      _geminiService.sendContextUpdate(contextText);
+      state = state.copyWith(
+        currentTopicId: null,
+        isLoadingContext: false,
+      );
+    } catch (e) {
+      debugPrint('[TutorSession] loadCourseContext error: $e');
+      state = state.copyWith(isLoadingContext: false);
     }
   }
 
@@ -145,21 +182,6 @@ class TutorSessionController extends _$TutorSessionController {
       sessionState: SessionState.idle,
       isMicrophoneActive: false,
     );
-  }
-
-  Future<String> _fetchContext(Dio dio, String courseId, String topicId) async {
-    try {
-      final response = await dio.get(
-        '/courses/$courseId/topics/$topicId/context',
-      );
-      return (response.data['context'] as String?) ?? '';
-    } catch (e) {
-      debugPrint(
-        '[TutorSession] Could not fetch context: $e. Proceeding without RAG context.',
-      );
-      // Non-fatal: proceed with empty context — the Tutor still works without RAG
-      return '';
-    }
   }
 
   Future<void> _startMicrophone() async {

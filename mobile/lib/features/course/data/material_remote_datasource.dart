@@ -56,7 +56,6 @@ class MaterialRemoteDataSource {
     final response = await _dio.post(
       '/courses/$courseId/topics/$topicId/materials',
       data: formData,
-      options: Options(contentType: 'multipart/form-data'),
     );
     if (response.statusCode == 201) {
       return Material.fromJson(response.data);

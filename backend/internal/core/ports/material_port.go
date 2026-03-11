@@ -23,6 +23,8 @@ type MaterialRepository interface {
 	CountReadyByTopic(ctx context.Context, topicID string) (int, error)
 	// UpdateStatus updates the processing status and optionally the extracted text.
 	UpdateStatus(ctx context.Context, materialID string, status domain.MaterialStatus, extractedText string) error
+	// SoftDeleteByTopicIDs marks materials as deleted for the given topic IDs.
+	SoftDeleteByTopicIDs(ctx context.Context, topicIDs []string) error
 }
 
 // TextExtractor defines the contract for extracting plain text from a raw file.

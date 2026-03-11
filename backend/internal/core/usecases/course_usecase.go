@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/ports"
@@ -15,14 +16,14 @@ import (
 
 // CourseUseCase holds the business rules for the Course Management module.
 type CourseUseCase struct {
-	courseRepo ports.CourseRepository
-	topicRepo  ports.TopicRepository
-	storage    ports.StorageService
-	avatarGen  ports.AvatarGenerator
+	courseRepo   ports.CourseRepository
+	topicRepo    ports.TopicRepository
+	materialRepo ports.MaterialRepository
+	chunkRepo    ports.ChunkRepository
+	storage      ports.StorageService
+	avatarGen    ports.AvatarGenerator
+	db         *gorm.DB
 }
-
-// ErrCourseForbidden is returned when a user tries to access another user's course.
-var ErrCourseForbidden = errors.New("forbidden course access")
 
 // NewCourseUseCase creates a new CourseUseCase with injected dependencies.
 func NewCourseUseCase(
@@ -38,6 +39,31 @@ func NewCourseUseCase(
 		avatarGen:  avatarGen,
 	}
 }
+
+// NewCourseUseCaseWithCascade creates CourseUseCase with materialRepo, chunkRepo and db for cascade delete.
+func NewCourseUseCaseWithCascade(
+	courseRepo ports.CourseRepository,
+	topicRepo ports.TopicRepository,
+	materialRepo ports.MaterialRepository,
+	chunkRepo ports.ChunkRepository,
+	db *gorm.DB,
+	storage ports.StorageService,
+	avatarGen ports.AvatarGenerator,
+) *CourseUseCase {
+	return &CourseUseCase{
+		courseRepo:   courseRepo,
+		topicRepo:    topicRepo,
+		materialRepo: materialRepo,
+		chunkRepo:    chunkRepo,
+		db:           db,
+		storage:      storage,
+		avatarGen:    avatarGen,
+	}
+}
+
+// ErrCourseForbidden is returned when a user tries to access another user's course.
+var ErrCourseForbidden = errors.New("forbidden course access")
+var ErrCourseNotFound = errors.New("course not found")
 
 // CreateCourseInput holds the data required to create a new course.
 type CreateCourseInput struct {
@@ -170,4 +196,124 @@ func (uc *CourseUseCase) AddTopic(ctx context.Context, courseID, userID, title s
 		return nil, err
 	}
 	return topic, nil
+}
+
+// UpdateCourseInput holds optional fields for partial course update.
+type UpdateCourseInput struct {
+	Name           string
+	EducationLevel string
+}
+
+// UpdateCourse updates a course (partial update). Validates ownership.
+func (uc *CourseUseCase) UpdateCourse(ctx context.Context, courseID, userID string, input UpdateCourseInput) (*domain.Course, error) {
+	course, err := uc.GetCourseByID(ctx, courseID, userID)
+	if err != nil || course == nil {
+		return nil, err
+	}
+	if input.Name != "" {
+		course.Name = input.Name
+	}
+	if input.EducationLevel != "" {
+		course.EducationLevel = input.EducationLevel
+	}
+	if err := uc.courseRepo.Update(ctx, course); err != nil {
+		return nil, err
+	}
+	return course, nil
+}
+
+// DeleteCourse soft-deletes a course and cascades to topics, materials, and chunks in a transaction.
+func (uc *CourseUseCase) DeleteCourse(ctx context.Context, courseID, userID string) error {
+	course, err := uc.GetCourseByID(ctx, courseID, userID)
+	if err != nil || course == nil {
+		if err != nil {
+			return err
+		}
+		return ErrCourseNotFound
+	}
+	if uc.db == nil {
+		return fmt.Errorf("cascade delete not configured")
+	}
+	topics, err := uc.topicRepo.FindByCourseForCascade(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	topicIDs := make([]string, 0, len(topics))
+	topicUUIDs := make([]uuid.UUID, 0, len(topics))
+	for _, t := range topics {
+		topicIDs = append(topicIDs, t.ID.String())
+		topicUUIDs = append(topicUUIDs, t.ID)
+	}
+	err = uc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		tx = tx.WithContext(ctx)
+		if len(topicUUIDs) > 0 {
+			if res := tx.Unscoped().Where("topic_id IN ?", topicUUIDs).Delete(&domain.MaterialChunk{}); res.Error != nil {
+				return res.Error
+			}
+			if res := tx.Model(&domain.Material{}).Where("topic_id IN ?", topicUUIDs).Where("deleted_at IS NULL").Update("deleted_at", time.Now()); res.Error != nil {
+				return res.Error
+			}
+			for _, id := range topicIDs {
+				if res := tx.Model(&domain.Topic{}).Where("id = ?", id).Update("deleted_at", time.Now()); res.Error != nil {
+					return res.Error
+				}
+			}
+		}
+		return tx.Model(&domain.Course{}).Where("id = ?", courseID).Update("deleted_at", time.Now()).Error
+	})
+	return err
+}
+
+// UpdateTopicInput holds optional fields for partial topic update.
+type UpdateTopicInput struct {
+	Title string
+}
+
+// UpdateTopic updates a topic (partial update). Validates course ownership and topic belongs to course.
+func (uc *CourseUseCase) UpdateTopic(ctx context.Context, courseID, topicID, userID string, input UpdateTopicInput) (*domain.Topic, error) {
+	course, err := uc.GetCourseByID(ctx, courseID, userID)
+	if err != nil || course == nil {
+		return nil, err
+	}
+	topic, err := uc.topicRepo.FindByID(ctx, topicID)
+	if err != nil || topic == nil {
+		return nil, err
+	}
+	if topic.CourseID.String() != courseID {
+		return nil, fmt.Errorf("topic does not belong to course")
+	}
+	if input.Title != "" {
+		topic.Title = input.Title
+	}
+	if err := uc.topicRepo.Update(ctx, topic); err != nil {
+		return nil, err
+	}
+	return topic, nil
+}
+
+// DeleteTopic soft-deletes a topic and cascades to materials and chunks in a transaction.
+func (uc *CourseUseCase) DeleteTopic(ctx context.Context, courseID, topicID, userID string) error {
+	course, err := uc.GetCourseByID(ctx, courseID, userID)
+	if err != nil || course == nil {
+		return err
+	}
+	topic, err := uc.topicRepo.FindByID(ctx, topicID)
+	if err != nil || topic == nil {
+		return err
+	}
+	if topic.CourseID.String() != courseID {
+		return fmt.Errorf("topic does not belong to course")
+	}
+	topicUUID, _ := uuid.Parse(topicID)
+	err = uc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		tx = tx.WithContext(ctx)
+		if res := tx.Unscoped().Where("topic_id = ?", topicUUID).Delete(&domain.MaterialChunk{}); res.Error != nil {
+			return res.Error
+		}
+		if res := tx.Model(&domain.Material{}).Where("topic_id = ?", topicUUID).Where("deleted_at IS NULL").Update("deleted_at", time.Now()); res.Error != nil {
+			return res.Error
+		}
+		return tx.Model(&domain.Topic{}).Where("id = ?", topicID).Update("deleted_at", time.Now()).Error
+	})
+	return err
 }

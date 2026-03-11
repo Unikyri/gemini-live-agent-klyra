@@ -92,9 +92,11 @@ func main() {
 	// --- Course wiring ---
 	courseRepo := repositories.NewPostgresCourseRepository(db)
 	topicRepo := repositories.NewPostgresTopicRepository(db)
+	chunkRepo := repositories.NewPostgresChunkRepository(db)
+	materialRepo := repositories.NewPostgresMaterialRepository(db)
 	storageSvc := initStorageService()                   // selected by STORAGE_MODE
 	imageGenSvc := repositories.NewVertexImagenService() // Imagen 3 on Vertex AI
-	courseUseCase := usecases.NewCourseUseCase(courseRepo, topicRepo, storageSvc, imageGenSvc)
+	courseUseCase := usecases.NewCourseUseCaseWithCascade(courseRepo, topicRepo, materialRepo, chunkRepo, db, storageSvc, imageGenSvc)
 
 	// --- RAG wiring (US8) ---
 	// SECURITY: EMBEDDING_CREDENTIALS_FILE should be the same service account used
@@ -128,9 +130,7 @@ func main() {
 		embeddingSvc = nil
 	}
 
-	chunkRepo := repositories.NewPostgresChunkRepository(db)
-	materialRepo := repositories.NewPostgresMaterialRepository(db)
-	ragUseCase = usecases.NewRAGUseCase(materialRepo, chunkRepo, embeddingSvc)
+	ragUseCase = usecases.NewRAGUseCaseWithTopicRepo(materialRepo, chunkRepo, topicRepo, embeddingSvc)
 	summaryGenerator := repositories.NewMarkdownSummaryGenerator()
 	topicUseCase := usecases.NewTopicUseCase(topicRepo, materialRepo, summaryGenerator)
 
@@ -217,11 +217,11 @@ func main() {
 		materialHandler.RegisterRoutes(protected)
 
 		// US8 — RAG context retrieval endpoint.
-		ragHandler := httphandlers.NewRAGHandler(ragUseCase)
+		ragHandler := httphandlers.NewRAGHandlerWithCourseUseCase(ragUseCase, courseUseCase)
 		ragHandler.RegisterRoutes(protected)
 
 		// Sprint 7 — Topic readiness and summary endpoints.
-		topicHandler := httphandlers.NewTopicHandler(topicUseCase)
+		topicHandler := httphandlers.NewTopicHandlerWithCourseUseCase(topicUseCase, courseUseCase)
 		topicHandler.RegisterRoutes(protected)
 	}
 

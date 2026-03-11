@@ -31,6 +31,8 @@ func (h *CourseHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/courses", h.CreateCourse)
 	rg.GET("/courses", h.ListCourses)
 	rg.GET("/courses/:course_id", h.GetCourse)
+	rg.PATCH("/courses/:course_id", h.UpdateCourse)
+	rg.DELETE("/courses/:course_id", h.DeleteCourse)
 	rg.POST("/courses/:course_id/topics", h.AddTopic)
 }
 
@@ -127,6 +129,60 @@ func (h *CourseHandler) GetCourse(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, course)
+}
+
+// UpdateCourse handles PATCH /api/v1/courses/:course_id
+func (h *CourseHandler) UpdateCourse(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	courseID := c.Param("course_id")
+
+	var body struct {
+		Name           string `json:"name"`
+		EducationLevel string `json:"education_level"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+
+	course, err := h.courseUseCase.UpdateCourse(c.Request.Context(), courseID, userID.(string), usecases.UpdateCourseInput{
+		Name:           body.Name,
+		EducationLevel: body.EducationLevel,
+	})
+	if errors.Is(err, usecases.ErrCourseForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update course"})
+		return
+	}
+	if course == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+		return
+	}
+	c.JSON(http.StatusOK, course)
+}
+
+// DeleteCourse handles DELETE /api/v1/courses/:course_id
+func (h *CourseHandler) DeleteCourse(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	courseID := c.Param("course_id")
+
+	err := h.courseUseCase.DeleteCourse(c.Request.Context(), courseID, userID.(string))
+	if errors.Is(err, usecases.ErrCourseForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if errors.Is(err, usecases.ErrCourseNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not delete course"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "course deleted"})
 }
 
 // AddTopic handles POST /api/v1/courses/:course_id/topics
