@@ -50,15 +50,21 @@ jobs:
       - name: Verify deployment health
         run: |
           set -euo pipefail
-          for i in 1 2 3 4 5; do
+          APP_URL="$(heroku apps:info --app "${{ env.HEROKU_APP }}" --json | python -c 'import json,sys; print(json.load(sys.stdin)[\"web_url\"].rstrip(\"/\"))')"
+          echo "Detected app URL: $APP_URL"
+
+          for i in $(seq 1 15); do
             sleep 10
-            STATUS="$(curl -s -o /dev/null -w "%{http_code}" "https://${{ env.HEROKU_APP }}.herokuapp.com/health")"
+            STATUS="$(curl -s -o /dev/null -w "%{http_code}" "${APP_URL}/health")"
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed (HTTP $STATUS)"
               exit 0
             fi
             echo "Health check attempt $i failed (HTTP $STATUS)"
           done
+
           echo "::error::Health check failed after retries"
           exit 1
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
 
