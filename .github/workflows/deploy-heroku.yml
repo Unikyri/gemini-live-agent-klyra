@@ -50,7 +50,16 @@ jobs:
       - name: Verify deployment health
         run: |
           set -euo pipefail
-          APP_URL="$(heroku apps:info --app "${{ env.HEROKU_APP }}" --json | python -c 'import json,sys; print(json.load(sys.stdin)[\"web_url\"].rstrip(\"/\"))')"
+          APP_URL="$(curl -sS \
+            -H 'Accept: application/vnd.heroku+json; version=3' \
+            -H \"Authorization: Bearer ${HEROKU_API_KEY}\" \
+            \"https://api.heroku.com/apps/${{ env.HEROKU_APP }}\" | \
+            node -e \"const fs=require('fs'); const j=JSON.parse(fs.readFileSync(0,'utf8')); console.log(String(j.web_url||'').replace(/\\/$/,''));\")"
+
+          if [ -z \"$APP_URL\" ]; then
+            echo \"::error::Failed to resolve Heroku app web_url\"
+            exit 1
+          fi
           echo "Detected app URL: $APP_URL"
 
           for i in $(seq 1 15); do
