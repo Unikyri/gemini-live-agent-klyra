@@ -12,6 +12,8 @@ permissions:
 env:
   HEROKU_APP: ${{ secrets.HEROKU_APP_NAME }}
   REGISTRY: registry.heroku.com
+  # Heroku app web_url as reported by Heroku API for klyra-backend-prod.
+  HEROKU_WEB_URL: https://klyra-backend-prod-86d406962fc0.herokuapp.com
 
 jobs:
   deploy:
@@ -50,17 +52,8 @@ jobs:
       - name: Verify deployment health
         run: |
           set -euo pipefail
-          APP_URL="$(curl -sS \
-            -H 'Accept: application/vnd.heroku+json; version=3' \
-            -H \"Authorization: Bearer ${HEROKU_API_KEY}\" \
-            \"https://api.heroku.com/apps/${{ env.HEROKU_APP }}\" | \
-            node -e \"const fs=require('fs'); const j=JSON.parse(fs.readFileSync(0,'utf8')); console.log(String(j.web_url||'').replace(/\\/$/,''));\")"
-
-          if [ -z \"$APP_URL\" ]; then
-            echo \"::error::Failed to resolve Heroku app web_url\"
-            exit 1
-          fi
-          echo "Detected app URL: $APP_URL"
+          APP_URL="${{ env.HEROKU_WEB_URL }}"
+          echo "Using app URL: $APP_URL"
 
           for i in $(seq 1 15); do
             sleep 10
@@ -74,6 +67,4 @@ jobs:
 
           echo "::error::Health check failed after retries"
           exit 1
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
 
