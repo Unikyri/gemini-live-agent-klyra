@@ -1,5 +1,5 @@
 # Build stage — compiled with the official Go image
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -13,6 +13,7 @@ FROM gcr.io/distroless/static-debian12 AS runner
 
 WORKDIR /app
 COPY --from=builder /app/klyra-backend .
+COPY --from=builder /app/migrations ./migrations
 
 # The port must match the PORT env var (default: 8080)
 EXPOSE 8080

@@ -54,6 +54,19 @@ func (m *MockUserRepository) Create(ctx context.Context, user *domain.User) erro
 	return nil
 }
 
+func (m *MockUserRepository) UpdateLearningProfile(ctx context.Context, id string, profile map[string]interface{}) error {
+	_ = ctx
+	u, err := m.FindByID(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return errors.New("not found")
+	}
+	u.LearningProfile = profile
+	return nil
+}
+
 // MockTokenService for testing
 type MockTokenService struct {
 	generateAccessTokenFn  func(user *domain.User) (string, error)

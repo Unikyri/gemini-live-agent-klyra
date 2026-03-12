@@ -16,6 +16,8 @@ type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
 	// FindByID retrieves a user by their UUID.
 	FindByID(ctx context.Context, id string) (*domain.User, error)
+	// UpdateLearningProfile updates the JSONB learning_profile for a user.
+	UpdateLearningProfile(ctx context.Context, id string, profile map[string]interface{}) error
 }
 
 // TokenService defines the contract for JWT operations.

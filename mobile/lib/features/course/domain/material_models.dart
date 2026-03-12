@@ -11,6 +11,8 @@ enum MaterialStatus {
   processing,
   @JsonValue('validated')
   validated,
+  @JsonValue('interpreted')
+  interpreted,
   @JsonValue('rejected')
   rejected,
 }
@@ -38,7 +40,8 @@ enum MaterialFormatType {
 extension MaterialStatusX on MaterialStatus {
   bool get isProcessing =>
       this == MaterialStatus.pending || this == MaterialStatus.processing;
-  bool get isReady => this == MaterialStatus.validated;
+  bool get isReady =>
+      this == MaterialStatus.validated || this == MaterialStatus.interpreted;
   bool get isFailed => this == MaterialStatus.rejected;
 }
 

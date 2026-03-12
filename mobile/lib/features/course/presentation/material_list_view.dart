@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:klyra/core/utils/web_file_picker.dart';
 import 'package:klyra/features/course/domain/material_models.dart' as domain;
 import 'package:klyra/features/course/presentation/material_controller.dart';
@@ -133,7 +134,11 @@ class MaterialListView extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: materials.length,
-              itemBuilder: (_, i) => _MaterialTile(material: materials[i]),
+              itemBuilder: (_, i) => _MaterialTile(
+                material: materials[i],
+                courseId: courseId,
+                topicId: topicId,
+              ),
             );
           },
           loading: () => const Padding(
@@ -157,7 +162,13 @@ class MaterialListView extends ConsumerWidget {
 
 class _MaterialTile extends StatelessWidget {
   final domain.Material material;
-  const _MaterialTile({required this.material});
+  final String courseId;
+  final String topicId;
+  const _MaterialTile({
+    required this.material,
+    required this.courseId,
+    required this.topicId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +227,13 @@ class _MaterialTile extends StatelessWidget {
         side: BorderSide(color: statusColor.withValues(alpha: 0.4)),
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
+      onTap: material.status.isReady
+          ? () {
+              context.push(
+                '/course/$courseId/topic/$topicId/material/${material.id}/review?name=${Uri.encodeComponent(material.originalName)}',
+              );
+            }
+          : null,
     );
   }
 }

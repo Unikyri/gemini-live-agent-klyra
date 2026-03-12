@@ -53,8 +53,26 @@ func main() {
 		log.Fatalf("Database ping failed: %v", err)
 	}
 
-	if err := dbRepo.RunMigrations("./migrations"); err != nil {
-		log.Fatalf("Database migrations failed: %v", err)
+	// Release phase / one-off migration mode (Heroku release command).
+	// When enabled, run migrations and exit without starting the HTTP server.
+	if strings.EqualFold(os.Getenv("RUN_MIGRATIONS_ONLY"), "true") {
+		log.Println("RUN_MIGRATIONS_ONLY=true — running database migrations and exiting")
+		if err := dbRepo.RunMigrations("./migrations"); err != nil {
+			log.Fatalf("Database migrations failed: %v", err)
+		}
+		log.Println("Database migrations completed successfully.")
+		os.Exit(0)
+	}
+
+	// Backwards-compatible local behaviour: run migrations on boot unless explicitly disabled.
+	// In production on Heroku, we set RUN_MIGRATIONS_ON_BOOT=false and rely on release phase.
+	runMigrationsOnBoot := strings.ToLower(strings.TrimSpace(getEnv("RUN_MIGRATIONS_ON_BOOT", "true")))
+	if runMigrationsOnBoot != "false" {
+		if err := dbRepo.RunMigrations("./migrations"); err != nil {
+			log.Fatalf("Database migrations failed: %v", err)
+		}
+	} else {
+		log.Println("Skipping migrations on boot (RUN_MIGRATIONS_ON_BOOT=false)")
 	}
 
 	db := dbRepo.GetDB()
@@ -75,6 +93,13 @@ func main() {
 	// Only this file knows about concrete implementations.
 	// Use cases and handlers only see interfaces (ports).
 
+	isProduction := strings.EqualFold(getEnv("ENV", "development"), "production")
+
+	// Guardrail: Heroku filesystem is ephemeral. Never allow local storage in production.
+	if isProduction && strings.EqualFold(getEnv("STORAGE_MODE", "gcs"), "local") {
+		log.Fatalf("FATAL: STORAGE_MODE=local is not supported in production (ephemeral filesystem). Use STORAGE_MODE=gcs.")
+	}
+
 	jwtSvc := repositories.NewJWTService(
 		mustEnv("JWT_SECRET"),
 		mustEnv("REFRESH_TOKEN_SECRET"),
@@ -88,12 +113,14 @@ func main() {
 		"guest":  repositories.NewGuestAuthStrategy(),
 	}
 	authUseCase := usecases.NewAuthUseCase(userRepo, jwtSvc, googleVerifier, authStrategies)
+	learningProfileUseCase := usecases.NewLearningProfileUseCase(userRepo)
 
 	// --- Course wiring ---
 	courseRepo := repositories.NewPostgresCourseRepository(db)
 	topicRepo := repositories.NewPostgresTopicRepository(db)
 	chunkRepo := repositories.NewPostgresChunkRepository(db)
 	materialRepo := repositories.NewPostgresMaterialRepository(db)
+	correctionRepo := repositories.NewPostgresCorrectionRepository(db)
 	storageSvc := initStorageService()                   // selected by STORAGE_MODE
 	imageGenSvc := repositories.NewVertexImagenService() // Imagen 3 on Vertex AI
 	courseUseCase := usecases.NewCourseUseCaseWithCascade(courseRepo, topicRepo, materialRepo, chunkRepo, db, storageSvc, imageGenSvc)
@@ -130,13 +157,13 @@ func main() {
 		embeddingSvc = nil
 	}
 
-	ragUseCase = usecases.NewRAGUseCaseWithTopicRepo(materialRepo, chunkRepo, topicRepo, embeddingSvc)
+	ragUseCase = usecases.NewRAGUseCaseWithCorrections(materialRepo, chunkRepo, topicRepo, correctionRepo, embeddingSvc)
 	summaryGenerator := repositories.NewMarkdownSummaryGenerator()
 	topicUseCase := usecases.NewTopicUseCase(topicRepo, materialRepo, summaryGenerator)
 
 	// --- Material wiring (US4) ---
 	textExtractor := repositories.NewPlainTextExtractor()
-	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor, ragUseCase)
+	materialUseCase := usecases.NewMaterialUseCase(materialRepo, topicRepo, courseRepo, storageSvc, textExtractor, correctionRepo, ragUseCase)
 
 	// --- HTTP Router setup ---
 	// BLOCKER fix: use gin.New() instead of gin.Default() to avoid trusting all proxies.
@@ -160,9 +187,14 @@ func main() {
 	// WARNING fix: CORS — allow configured origins (comma-separated).
 	// In development this can include web localhost ports.
 	// Default: multiple common dev ports (React 3000, Vite 5173, Flutter web, custom development)
-	allowedOrigins := parseAllowedOrigins(
-		getEnv("ALLOWED_ORIGINS", getEnv("ALLOWED_ORIGIN", "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5174")),
-	)
+	allowedOriginsRaw := getEnv("ALLOWED_ORIGINS", getEnv("ALLOWED_ORIGIN", ""))
+	if isProduction && strings.TrimSpace(allowedOriginsRaw) == "" {
+		log.Fatalf("Required environment variable ALLOWED_ORIGINS is not set for production (ENV=production).")
+	}
+	if strings.TrimSpace(allowedOriginsRaw) == "" {
+		allowedOriginsRaw = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5174"
+	}
+	allowedOrigins := parseAllowedOrigins(allowedOriginsRaw)
 	allowedOriginFunc := func(origin string) bool {
 		for _, configured := range allowedOrigins {
 			if strings.EqualFold(strings.TrimSpace(configured), strings.TrimSpace(origin)) {
@@ -170,11 +202,15 @@ func main() {
 			}
 		}
 
-		originLower := strings.ToLower(strings.TrimSpace(origin))
-		return strings.HasPrefix(originLower, "http://localhost:") ||
-			strings.HasPrefix(originLower, "http://127.0.0.1:") ||
-			strings.HasPrefix(originLower, "https://localhost:") ||
-			strings.HasPrefix(originLower, "https://127.0.0.1:")
+		// Development-only fallback to allow localhost ports.
+		if !isProduction {
+			originLower := strings.ToLower(strings.TrimSpace(origin))
+			return strings.HasPrefix(originLower, "http://localhost:") ||
+				strings.HasPrefix(originLower, "http://127.0.0.1:") ||
+				strings.HasPrefix(originLower, "https://localhost:") ||
+				strings.HasPrefix(originLower, "https://127.0.0.1:")
+		}
+		return false
 	}
 	router.Use(cors.New(cors.Config{
 		AllowOriginFunc:  allowedOriginFunc,
@@ -187,7 +223,21 @@ func main() {
 
 	// Health check endpoint — used by Cloud Run and load balancers.
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		check := strings.ToLower(strings.TrimSpace(c.Query("check")))
+		if strings.Contains(check, "db") {
+			if err := dbRepo.Ping(); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"status": "degraded",
+					"db":     "unreachable",
+					"error":  err.Error(),
+				})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "ok", "db": "connected"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	if strings.EqualFold(getEnv("STORAGE_MODE", "gcs"), "local") {
@@ -223,6 +273,10 @@ func main() {
 		// Sprint 7 — Topic readiness and summary endpoints.
 		topicHandler := httphandlers.NewTopicHandlerWithCourseUseCase(topicUseCase, courseUseCase)
 		topicHandler.RegisterRoutes(protected)
+
+		// Sprint 8 — Learning profile endpoints (feature-flagged).
+		lpHandler := httphandlers.NewLearningProfileHandler(learningProfileUseCase)
+		lpHandler.RegisterRoutes(protected)
 	}
 
 	port := getEnv("PORT", "8080")
@@ -275,6 +329,12 @@ func (i *ipRateLimiter) RateLimit() gin.HandlerFunc {
 }
 
 func initDBRepository() (ports.DBRepository, error) {
+	// Precedence 1: DATABASE_URL (Heroku, Render, Railway, etc.)
+	if databaseURL := os.Getenv("DATABASE_URL"); strings.TrimSpace(databaseURL) != "" {
+		log.Printf("Database mode: url (DATABASE_URL detected)")
+		return database.NewPostgreSQLRepositoryFromURL(databaseURL)
+	}
+
 	dbMode := strings.ToLower(getEnv("DB_MODE", "local"))
 	log.Printf("Database mode: %s", dbMode)
 

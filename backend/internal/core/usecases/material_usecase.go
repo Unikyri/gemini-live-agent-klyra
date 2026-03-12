@@ -2,11 +2,13 @@ package usecases
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/ports"
@@ -20,11 +22,13 @@ type MaterialUseCase struct {
 	courseRepo   ports.CourseRepository
 	storage      ports.StorageService
 	extractor    ports.TextExtractor
+	correctionRepo ports.CorrectionRepository
 	ragUseCase   *RAGUseCase
 }
 
 // ErrMaterialForbidden is returned when a user tries to access another user's course materials.
 var ErrMaterialForbidden = errors.New("forbidden material access")
+var ErrCorrectionNotFound = errors.New("correction not found")
 
 // NewMaterialUseCase creates a new MaterialUseCase with injected dependencies.
 func NewMaterialUseCase(
@@ -33,6 +37,7 @@ func NewMaterialUseCase(
 	courseRepo ports.CourseRepository,
 	storage ports.StorageService,
 	extractor ports.TextExtractor,
+	correctionRepo ports.CorrectionRepository,
 	ragUseCase *RAGUseCase,
 ) *MaterialUseCase {
 	return &MaterialUseCase{
@@ -41,8 +46,183 @@ func NewMaterialUseCase(
 		courseRepo:   courseRepo,
 		storage:      storage,
 		extractor:    extractor,
+		correctionRepo: correctionRepo,
 		ragUseCase:   ragUseCase,
 	}
+}
+
+func (uc *MaterialUseCase) validateCourseTopicOwnership(ctx context.Context, courseID, topicID, userID string) error {
+	course, err := uc.courseRepo.FindByID(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	if course == nil {
+		return nil
+	}
+	if course.UserID.String() != userID {
+		return ErrMaterialForbidden
+	}
+	topics, err := uc.topicRepo.FindByCourse(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	for _, t := range topics {
+		if t.ID.String() == topicID {
+			return nil
+		}
+	}
+	// 404 anti-enumeration
+	return nil
+}
+
+func (uc *MaterialUseCase) GetMaterialInterpretation(ctx context.Context, courseID, topicID, materialID, userID string) (*domain.InterpretationResult, error) {
+	// ownership checks
+	course, err := uc.courseRepo.FindByID(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if course == nil {
+		return nil, nil
+	}
+	if course.UserID.String() != userID {
+		return nil, ErrMaterialForbidden
+	}
+	topics, err := uc.topicRepo.FindByCourse(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	topicOK := false
+	for _, t := range topics {
+		if t.ID.String() == topicID {
+			topicOK = true
+			break
+		}
+	}
+	if !topicOK {
+		return nil, nil
+	}
+
+	material, err := uc.materialRepo.FindByID(ctx, materialID)
+	if err != nil {
+		return nil, err
+	}
+	if material == nil {
+		return nil, nil
+	}
+	if material.TopicID.String() != topicID {
+		return nil, nil
+	}
+	if len(material.InterpretationJSON) == 0 {
+		return nil, nil
+	}
+	var result domain.InterpretationResult
+	if err := json.Unmarshal(material.InterpretationJSON, &result); err != nil {
+		return nil, fmt.Errorf("invalid interpretation_json: %w", err)
+	}
+	return &result, nil
+}
+
+type CreateCorrectionInput struct {
+	UserID        string
+	CourseID      string
+	TopicID       string
+	MaterialID    string
+	BlockIndex    int
+	OriginalText  string
+	CorrectedText string
+}
+
+func (uc *MaterialUseCase) CreateCorrection(ctx context.Context, in CreateCorrectionInput) (*domain.MaterialCorrection, error) {
+	course, err := uc.courseRepo.FindByID(ctx, in.CourseID)
+	if err != nil {
+		return nil, err
+	}
+	if course == nil {
+		return nil, nil
+	}
+	if course.UserID.String() != in.UserID {
+		return nil, ErrMaterialForbidden
+	}
+
+	material, err := uc.materialRepo.FindByID(ctx, in.MaterialID)
+	if err != nil {
+		return nil, err
+	}
+	if material == nil || material.TopicID.String() != in.TopicID {
+		return nil, nil
+	}
+	// Require interpretation exists before corrections.
+	if len(material.InterpretationJSON) == 0 {
+		return nil, nil
+	}
+
+	corr := &domain.MaterialCorrection{
+		MaterialID:    material.ID,
+		BlockIndex:    in.BlockIndex,
+		OriginalText:  in.OriginalText,
+		CorrectedText: in.CorrectedText,
+	}
+	if uc.correctionRepo == nil {
+		return nil, fmt.Errorf("correction repository not configured")
+	}
+	if err := uc.correctionRepo.Create(ctx, corr); err != nil {
+		return nil, err
+	}
+	return corr, nil
+}
+
+func (uc *MaterialUseCase) ListCorrections(ctx context.Context, courseID, topicID, materialID, userID string) ([]domain.MaterialCorrection, error) {
+	course, err := uc.courseRepo.FindByID(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if course == nil {
+		return nil, nil
+	}
+	if course.UserID.String() != userID {
+		return nil, ErrMaterialForbidden
+	}
+	material, err := uc.materialRepo.FindByID(ctx, materialID)
+	if err != nil {
+		return nil, err
+	}
+	if material == nil || material.TopicID.String() != topicID {
+		return nil, nil
+	}
+	if uc.correctionRepo == nil {
+		return []domain.MaterialCorrection{}, nil
+	}
+	return uc.correctionRepo.FindByMaterial(ctx, materialID)
+}
+
+func (uc *MaterialUseCase) DeleteCorrection(ctx context.Context, courseID, topicID, materialID, correctionID, userID string) error {
+	course, err := uc.courseRepo.FindByID(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	if course == nil {
+		return ErrCorrectionNotFound
+	}
+	if course.UserID.String() != userID {
+		return ErrMaterialForbidden
+	}
+	material, err := uc.materialRepo.FindByID(ctx, materialID)
+	if err != nil {
+		return err
+	}
+	if material == nil || material.TopicID.String() != topicID {
+		return ErrCorrectionNotFound
+	}
+	if uc.correctionRepo == nil {
+		return ErrCorrectionNotFound
+	}
+	if err := uc.correctionRepo.Delete(ctx, correctionID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCorrectionNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 // UploadMaterialInput holds all data required to upload a material.

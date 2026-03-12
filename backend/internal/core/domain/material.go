@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 )
 
 // MaterialFormatType enumerates the accepted file formats for learning materials.
@@ -28,6 +29,7 @@ const (
 	MaterialStatusPending    MaterialStatus = "pending"
 	MaterialStatusProcessing MaterialStatus = "processing"
 	MaterialStatusValidated  MaterialStatus = "validated"
+	MaterialStatusInterpreted MaterialStatus = "interpreted"
 	MaterialStatusRejected   MaterialStatus = "rejected"
 )
 
@@ -42,6 +44,9 @@ type Material struct {
 	// ExtractedText holds the plain-text content used for RAG embedding.
 	// Populated asynchronously; empty while status is "pending" or "processing".
 	ExtractedText string         `json:"extracted_text,omitempty"`
+	// InterpretationJSON stores structured multimodal interpretation (blocks, LaTeX, transcripts).
+	// Populated asynchronously when Gemini interpretation is enabled.
+	InterpretationJSON datatypes.JSON `json:"interpretation_json,omitempty" gorm:"type:jsonb"`
 	Status        MaterialStatus `json:"status" gorm:"default:pending"`
 	OriginalName  string         `json:"original_name"` // original filename from the upload
 	SizeBytes     int64          `json:"size_bytes"`    // file size in bytes

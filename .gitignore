@@ -37,6 +37,8 @@ build/
 .packages
 .pub-cache/
 .pub/
+/mobile/android/.gradle/
+/mobile/build/
 /android/app/src/profile/
 /android/app/src/release/
 /ios/Flutter/App.framework

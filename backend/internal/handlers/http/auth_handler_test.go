@@ -55,6 +55,18 @@ func (m *testAuthMockUserRepository) FindByEmail(ctx context.Context, email stri
 	return nil, nil
 }
 
+func (m *testAuthMockUserRepository) UpdateLearningProfile(ctx context.Context, id string, profile map[string]interface{}) error {
+	_ = ctx
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.usersByID[id]
+	if !ok || u == nil {
+		return errors.New("not found")
+	}
+	u.LearningProfile = profile
+	return nil
+}
+
 type testAuthMockTokenService struct{}
 
 func (m *testAuthMockTokenService) GenerateAccessToken(user *domain.User) (string, error) {

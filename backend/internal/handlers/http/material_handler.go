@@ -75,6 +75,10 @@ func NewMaterialHandler(materialUseCase *usecases.MaterialUseCase) *MaterialHand
 func (h *MaterialHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/courses/:course_id/topics/:topic_id/materials", h.UploadMaterial)
 	rg.GET("/courses/:course_id/topics/:topic_id/materials", h.ListMaterials)
+	rg.GET("/courses/:course_id/topics/:topic_id/materials/:material_id/interpretation", h.GetInterpretation)
+	rg.POST("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections", h.CreateCorrection)
+	rg.GET("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections", h.ListCorrections)
+	rg.DELETE("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections/:correction_id", h.DeleteCorrection)
 }
 
 // UploadMaterial handles POST /api/v1/courses/:course_id/topics/:topic_id/materials
@@ -232,4 +236,131 @@ func (h *MaterialHandler) ListMaterials(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"materials": materials, "total": len(materials)})
+}
+
+func (h *MaterialHandler) GetInterpretation(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+	courseID := c.Param("course_id")
+	topicID := c.Param("topic_id")
+	materialID := c.Param("material_id")
+
+	result, err := h.materialUseCase.GetMaterialInterpretation(c.Request.Context(), courseID, topicID, materialID, userID)
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve interpretation"})
+		return
+	}
+	if result == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interpretation not found"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+type createCorrectionRequest struct {
+	BlockIndex    int    `json:"block_index"`
+	OriginalText  string `json:"original_text"`
+	CorrectedText string `json:"corrected_text"`
+}
+
+func (h *MaterialHandler) CreateCorrection(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+	courseID := c.Param("course_id")
+	topicID := c.Param("topic_id")
+	materialID := c.Param("material_id")
+
+	var req createCorrectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	corr, err := h.materialUseCase.CreateCorrection(c.Request.Context(), usecases.CreateCorrectionInput{
+		UserID:        userID,
+		CourseID:      courseID,
+		TopicID:       topicID,
+		MaterialID:    materialID,
+		BlockIndex:    req.BlockIndex,
+		OriginalText:  req.OriginalText,
+		CorrectedText: req.CorrectedText,
+	})
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create correction"})
+		return
+	}
+	if corr == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "material or interpretation not found"})
+		return
+	}
+	c.JSON(http.StatusCreated, corr)
+}
+
+func (h *MaterialHandler) ListCorrections(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+	courseID := c.Param("course_id")
+	topicID := c.Param("topic_id")
+	materialID := c.Param("material_id")
+	items, err := h.materialUseCase.ListCorrections(c.Request.Context(), courseID, topicID, materialID, userID)
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list corrections"})
+		return
+	}
+	if items == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "material not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"corrections": items, "total": len(items)})
+}
+
+func (h *MaterialHandler) DeleteCorrection(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+	courseID := c.Param("course_id")
+	topicID := c.Param("topic_id")
+	materialID := c.Param("material_id")
+	correctionID := c.Param("correction_id")
+
+	err := h.materialUseCase.DeleteCorrection(c.Request.Context(), courseID, topicID, materialID, correctionID, userID)
+	if errors.Is(err, usecases.ErrMaterialForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if errors.Is(err, usecases.ErrCorrectionNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not delete correction"})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

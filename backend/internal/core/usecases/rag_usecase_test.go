@@ -9,7 +9,39 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/domain"
+	"github.com/Unikyri/gemini-live-agent-klyra/backend/internal/core/ports"
 )
+
+type fakeCorrectionRepo struct {
+	byChunk map[string]string
+}
+
+func (f *fakeCorrectionRepo) Create(ctx context.Context, correction *domain.MaterialCorrection) error {
+	return nil
+}
+func (f *fakeCorrectionRepo) FindByMaterial(ctx context.Context, materialID string) ([]domain.MaterialCorrection, error) {
+	return []domain.MaterialCorrection{}, nil
+}
+func (f *fakeCorrectionRepo) FindByChunkIDs(ctx context.Context, chunkIDs []string) ([]domain.MaterialCorrection, error) {
+	var out []domain.MaterialCorrection
+	for _, id := range chunkIDs {
+		if v, ok := f.byChunk[id]; ok {
+			parsed, err := uuid.Parse(id)
+			if err != nil {
+				continue
+			}
+			out = append(out, domain.MaterialCorrection{
+				ID:            uuid.New(),
+				ChunkID:       &parsed,
+				CorrectedText: v,
+			})
+		}
+	}
+	return out, nil
+}
+func (f *fakeCorrectionRepo) Delete(ctx context.Context, correctionID string) error {
+	return nil
+}
 
 func TestGetTopicContext_QueryEmpty(t *testing.T) {
 	ctx := context.Background()
@@ -34,6 +66,37 @@ func TestGetTopicContext_QueryEmpty(t *testing.T) {
 	}
 	if !result.HasMaterials {
 		t.Fatal("expected HasMaterials=true")
+	}
+}
+
+func TestGetTopicContext_AppliesCorrectionsByChunkID(t *testing.T) {
+	ctx := context.Background()
+	materialRepo := NewMockMaterialRepository()
+	chunkRepo := NewMockChunkRepository()
+	topicRepo := ports.TopicRepository(nil)
+	embedder := ports.Embedder(nil)
+
+	topicID := uuid.New()
+	materialID := uuid.New()
+	chunkID := uuid.New()
+	chunkRepo.chunksByTopic[topicID.String()] = []domain.MaterialChunk{
+		{ID: chunkID, MaterialID: materialID, TopicID: topicID, ChunkIndex: 0, Content: "original"},
+	}
+
+	uc := NewRAGUseCaseWithCorrections(
+		materialRepo,
+		chunkRepo,
+		topicRepo,
+		&fakeCorrectionRepo{byChunk: map[string]string{chunkID.String(): "corrected"}},
+		embedder,
+	)
+
+	result, err := uc.GetTopicContext(ctx, topicID.String(), "")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !strings.Contains(result.Context, "corrected") {
+		t.Fatalf("expected corrected content, got %q", result.Context)
 	}
 }
 

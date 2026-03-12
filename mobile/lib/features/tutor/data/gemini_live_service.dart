@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Represents the current state of the Gemini Live session.
-enum SessionState { idle, connecting, active, speaking, error }
+enum SessionState { idle, connecting, active, speaking, reconnecting, error }
 
 /// GeminiLiveService manages the real-time WebSocket connection to Gemini Live API.
 ///
@@ -35,6 +35,16 @@ class GeminiLiveService {
   /// Fires whenever Gemini returns a text transcript chunk.
   final _transcriptController = StreamController<String>.broadcast();
   Stream<String> get transcriptStream => _transcriptController.stream;
+
+  /// Emits `context_type` when Gemini issues `change_background`.
+  final _backgroundController = StreamController<String>.broadcast();
+  Stream<String> get backgroundContextStream => _backgroundController.stream;
+
+  int _reconnectAttempt = 0;
+  static const int _maxReconnectAttempts = 5;
+
+  Map<String, dynamic>? _lastSetupMessage;
+  final List<String> _contextUpdatesToResend = [];
 
   GeminiLiveService(this._apiKey);
 
@@ -68,6 +78,27 @@ class GeminiLiveService {
               {'text': systemPrompt}
             ]
           },
+          'tools': [
+            {
+              'function_declarations': [
+                {
+                  'name': 'change_background',
+                  'description':
+                      'Changes the visual background theme based on the current topic of conversation.',
+                  'parameters': {
+                    'type': 'object',
+                    'properties': {
+                      'context_type': {
+                        'type': 'string',
+                        'enum': ['math', 'science', 'history', 'default']
+                      }
+                    },
+                    'required': ['context_type']
+                  }
+                }
+              ]
+            }
+          ],
           'generation_config': {
             'response_modalities': ['AUDIO'],
             'speech_config': {
@@ -78,6 +109,7 @@ class GeminiLiveService {
           }
         }
       };
+      _lastSetupMessage = setup;
       _channel!.sink.add(jsonEncode(setup));
 
       // Listen for incoming messages
@@ -85,14 +117,15 @@ class GeminiLiveService {
         _handleMessage,
         onError: (error) {
           debugPrint('[GeminiLive] WebSocket error: $error');
-          _stateController.add(SessionState.error);
+          _scheduleReconnect();
         },
         onDone: () {
           debugPrint('[GeminiLive] WebSocket connection closed.');
-          _stateController.add(SessionState.idle);
+          _scheduleReconnect();
         },
       );
 
+      _reconnectAttempt = 0;
       _stateController.add(SessionState.active);
     } catch (e) {
       debugPrint('[GeminiLive] Connect failed: $e');
@@ -104,11 +137,44 @@ class GeminiLiveService {
   /// Sends a context update to the active session (e.g. after the user selects a topic).
   /// The text is sent as client_content so the model can use it as reference.
   void sendContextUpdate(String contextText) {
+    _contextUpdatesToResend.add(contextText);
+    _sendContextUpdate(contextText);
+  }
+
+  void _sendContextUpdate(String contextText) {
     if (_channel == null) return;
     final message = {
       'clientContent': {
         'parts': [
           {'text': '[CONTEXTO DEL TEMA SELECCIONADO]\n$contextText'}
+        ],
+        'turnComplete': true,
+      }
+    };
+    _channel!.sink.add(jsonEncode(message));
+  }
+
+  /// Sends an image (base64 JPEG) plus prompt text as user content.
+  void sendImageData({
+    required String base64Jpeg,
+    required String promptText,
+  }) {
+    if (_channel == null) return;
+    final message = {
+      'clientContent': {
+        'turns': [
+          {
+            'role': 'user',
+            'parts': [
+              {
+                'inlineData': {
+                  'mimeType': 'image/jpeg',
+                  'data': base64Jpeg,
+                }
+              },
+              {'text': promptText},
+            ]
+          }
         ],
         'turnComplete': true,
       }
@@ -156,6 +222,17 @@ class GeminiLiveService {
       for (final part in parts) {
         final partMap = part as Map<String, dynamic>;
 
+        final functionCall = partMap['functionCall'] as Map<String, dynamic>?;
+        if (functionCall != null) {
+          final name = functionCall['name'] as String?;
+          final args = functionCall['args'] as Map<String, dynamic>? ?? const {};
+          if (name == 'change_background') {
+            final contextType = (args['context_type'] as String?) ?? 'default';
+            _backgroundController.add(contextType);
+            _sendToolResponseForBackground(contextType);
+          }
+        }
+
         // Audio response from model
         final inlineData = partMap['inlineData'] as Map<String, dynamic>?;
         if (inlineData != null) {
@@ -177,6 +254,75 @@ class GeminiLiveService {
       }
     } catch (e) {
       debugPrint('[GeminiLive] Failed to parse server message: $e');
+    }
+  }
+
+  void _sendToolResponseForBackground(String contextType) {
+    if (_channel == null) return;
+    final message = {
+      'toolResponse': {
+        'functionResponses': [
+          {
+            'name': 'change_background',
+            'response': {
+              'status': 'ok',
+              'context_type': contextType,
+            }
+          }
+        ]
+      }
+    };
+    _channel!.sink.add(jsonEncode(message));
+  }
+
+  void _scheduleReconnect() {
+    if (_lastSetupMessage == null) {
+      _stateController.add(SessionState.idle);
+      return;
+    }
+    if (_reconnectAttempt >= _maxReconnectAttempts) {
+      _stateController.add(SessionState.error);
+      return;
+    }
+
+    _stateController.add(SessionState.reconnecting);
+    final delay = _backoffForAttempt(_reconnectAttempt);
+    _reconnectAttempt++;
+    Future<void>.delayed(delay, () async {
+      try {
+        await _reconnect();
+      } catch (e) {
+        debugPrint('[GeminiLive] Reconnect failed: $e');
+        _scheduleReconnect();
+      }
+    });
+  }
+
+  Duration _backoffForAttempt(int attempt) {
+    const scheduleSeconds = [1, 2, 5, 10, 30];
+    final idx = attempt.clamp(0, scheduleSeconds.length - 1);
+    return Duration(seconds: scheduleSeconds[idx]);
+  }
+
+  Future<void> _reconnect() async {
+    await _channel?.sink.close();
+    _channel = null;
+
+    final uri = Uri.parse('$_geminiWsUrl?key=$_apiKey');
+    _channel = WebSocketChannel.connect(uri);
+    await _channel!.ready;
+
+    _channel!.sink.add(jsonEncode(_lastSetupMessage));
+    _channel!.stream.listen(
+      _handleMessage,
+      onError: (_) => _scheduleReconnect(),
+      onDone: _scheduleReconnect,
+    );
+
+    _stateController.add(SessionState.active);
+
+    for (final ctx in _contextUpdatesToResend) {
+      _sendContextUpdate(ctx);
     }
   }
 
@@ -214,6 +360,7 @@ Until then, you can discuss the course structure and help them choose a topic.''
     _channel = null;
     await _audioOutputController?.close();
     _audioOutputController = null;
+    _reconnectAttempt = 0;
     _stateController.add(SessionState.idle);
   }
 
@@ -221,5 +368,6 @@ Until then, you can discuss the course structure and help them choose a topic.''
     disconnect();
     _stateController.close();
     _transcriptController.close();
+    _backgroundController.close();
   }
 }

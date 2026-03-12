@@ -43,6 +43,7 @@ type RAGUseCase struct {
 	materialRepo ports.MaterialRepository
 	chunkRepo    ports.ChunkRepository
 	topicRepo    ports.TopicRepository
+	correctionRepo ports.CorrectionRepository
 	embedder     ports.Embedder
 }
 // NewRAGUseCase constructs a new RAGUseCase.
@@ -71,6 +72,55 @@ func NewRAGUseCaseWithTopicRepo(
 		topicRepo:    topicRepo,
 		embedder:     embedder,
 	}
+}
+
+// NewRAGUseCaseWithCorrections wires a correction repository for override merge.
+func NewRAGUseCaseWithCorrections(
+	materialRepo ports.MaterialRepository,
+	chunkRepo ports.ChunkRepository,
+	topicRepo ports.TopicRepository,
+	correctionRepo ports.CorrectionRepository,
+	embedder ports.Embedder,
+) *RAGUseCase {
+	return &RAGUseCase{
+		materialRepo:    materialRepo,
+		chunkRepo:       chunkRepo,
+		topicRepo:       topicRepo,
+		correctionRepo:  correctionRepo,
+		embedder:        embedder,
+	}
+}
+
+func (uc *RAGUseCase) applyCorrectionsByChunkIDs(ctx context.Context, chunks []domain.MaterialChunk) ([]domain.MaterialChunk, error) {
+	if uc.correctionRepo == nil || len(chunks) == 0 {
+		return chunks, nil
+	}
+	ids := make([]string, 0, len(chunks))
+	for _, c := range chunks {
+		ids = append(ids, c.ID.String())
+	}
+	corrections, err := uc.correctionRepo.FindByChunkIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(corrections) == 0 {
+		return chunks, nil
+	}
+	byChunk := map[string]domain.MaterialCorrection{}
+	for _, corr := range corrections {
+		if corr.ChunkID == nil {
+			continue
+		}
+		byChunk[corr.ChunkID.String()] = corr
+	}
+	out := make([]domain.MaterialChunk, len(chunks))
+	copy(out, chunks)
+	for i := range out {
+		if corr, ok := byChunk[out[i].ID.String()]; ok && corr.CorrectedText != "" {
+			out[i].Content = corr.CorrectedText
+		}
+	}
+	return out, nil
 }
 
 // ProcessMaterialChunks splits a validated material's extracted text into chunks,
@@ -142,6 +192,10 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		if err != nil {
 			return nil, fmt.Errorf("rag: get topic context: %w", err)
 		}
+		chunks, err = uc.applyCorrectionsByChunkIDs(ctx, chunks)
+		if err != nil {
+			return nil, fmt.Errorf("rag: apply corrections: %w", err)
+		}
 		if len(chunks) == 0 {
 			return &ContextResult{
 				Context:      "",
@@ -167,6 +221,10 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		chunks, err := uc.chunkRepo.GetChunksByTopic(ctx, topicID)
 		if err != nil {
 			return nil, fmt.Errorf("rag: get topic context: %w", err)
+		}
+		chunks, err = uc.applyCorrectionsByChunkIDs(ctx, chunks)
+		if err != nil {
+			return nil, fmt.Errorf("rag: apply corrections: %w", err)
 		}
 		if len(chunks) == 0 {
 			return &ContextResult{
@@ -208,9 +266,17 @@ func (uc *RAGUseCase) GetTopicContext(ctx context.Context, topicID, query string
 		}, nil
 	}
 
-	var sb strings.Builder
+	chunks := make([]domain.MaterialChunk, 0, len(results))
 	for _, r := range results {
-		sb.WriteString(r.Chunk.Content)
+		chunks = append(chunks, r.Chunk)
+	}
+	chunks, err = uc.applyCorrectionsByChunkIDs(ctx, chunks)
+	if err != nil {
+		return nil, fmt.Errorf("rag: apply corrections: %w", err)
+	}
+	var sb strings.Builder
+	for _, c := range chunks {
+		sb.WriteString(c.Content)
 		sb.WriteString("\n\n")
 	}
 	return &ContextResult{
@@ -256,6 +322,18 @@ func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query stri
 				Message:      "No hay materiales en ningún tema de este curso. El tutor usará su conocimiento base.",
 			}, nil
 		}
+		// Apply corrections (override chunk content) if configured.
+		candidates := make([]domain.MaterialChunk, 0, len(results))
+		for _, r := range results {
+			candidates = append(candidates, r.Chunk)
+		}
+		candidates, err = uc.applyCorrectionsByChunkIDs(ctx, candidates)
+		if err != nil {
+			return nil, fmt.Errorf("rag: apply corrections: %w", err)
+		}
+		for i := range results {
+			results[i].Chunk = candidates[i]
+		}
 		return &ContextResult{
 			Context:      buildCourseContextFromResults(results, topicTitles),
 			Truncated:    true,
@@ -267,6 +345,10 @@ func (uc *RAGUseCase) GetCourseContext(ctx context.Context, courseID, query stri
 	chunks, err := uc.chunkRepo.GetChunksByCourse(ctx, courseID)
 	if err != nil {
 		return nil, fmt.Errorf("rag: get chunks by course: %w", err)
+	}
+	chunks, err = uc.applyCorrectionsByChunkIDs(ctx, chunks)
+	if err != nil {
+		return nil, fmt.Errorf("rag: apply corrections: %w", err)
 	}
 	if len(chunks) == 0 {
 		return &ContextResult{

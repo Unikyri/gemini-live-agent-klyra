@@ -84,3 +84,37 @@ Or leave it empty to use the default value automatically.
 **Why this matters:** Avatar images and other static assets are served from the backend. The mobile app uses platform-aware URL resolution to ensure images load correctly across all platforms.
 
 _This repository enforces strict security conventions (see Threat Model) and code quality standards._
+
+## CI/CD (GitHub Actions → Heroku)
+
+This repo uses **GitHub Actions** for CI and deploys the backend to **Heroku** via **Heroku Container Registry**.
+
+### Workflows
+- **Backend CI**: `.github/workflows/ci.yml`
+  - Runs on PRs and pushes to `main` when `backend/**` changes.
+  - Executes `go test ./...` (with race detector) + `go vet`.
+- **Deploy to Heroku**: `.github/workflows/deploy-heroku.yml`
+  - Runs on `main` **only after** Backend CI succeeds.
+  - Builds & pushes two images:
+    - `web` from `backend/Dockerfile`
+    - `release` from `backend/Dockerfile.release` (runs DB migrations with `RUN_MIGRATIONS_ONLY=true`)
+  - Releases both process types (`web` + `release`) to Heroku.
+
+### Required GitHub Secrets
+Configure in GitHub → Settings → Secrets and variables → Actions:
+- `HEROKU_API_KEY`: your Heroku API key (Account → API Key)
+- `HEROKU_APP_NAME`: `klyra-backend-prod`
+
+### Required Heroku Config Vars
+These **must live in Heroku**, not in GitHub Secrets:
+- `DATABASE_URL` (set automatically by Heroku Postgres addon)
+- `ENV=production`, `GIN_MODE=release`
+- `JWT_SECRET`, `REFRESH_TOKEN_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `ALLOWED_ORIGINS`
+- `RUN_MIGRATIONS_ON_BOOT=false`
+- `STORAGE_MODE=gcs`, `GCP_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS_JSON` (if using GCS/Vertex)
+
+### Health checks
+- `GET /health` → `200 {"status":"ok"}`
+- `GET /health?check=db` → verifies DB connectivity

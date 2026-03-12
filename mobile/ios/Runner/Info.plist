@@ -48,5 +48,7 @@
 	<!-- US9: Microphone permission required for Gemini Live voice tutoring -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Klyra uses your microphone to enable voice conversations with your AI tutor powered by Gemini Live.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Klyra necesita la cámara para que puedas mostrar tus apuntes escritos a mano al tutor interactivo y recibir ayuda visual inmediata.</string>
 </dict>
 </plist>

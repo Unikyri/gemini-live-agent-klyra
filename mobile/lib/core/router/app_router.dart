@@ -5,6 +5,7 @@ import 'package:klyra/features/auth/presentation/auth_controller.dart';
 import 'package:klyra/features/auth/presentation/login_screen.dart';
 import 'package:klyra/features/course/presentation/course_dashboard_screen.dart';
 import 'package:klyra/features/course/presentation/course_detail_screen.dart';
+import 'package:klyra/features/course/presentation/screens/material_review_screen.dart';
 import 'package:klyra/features/course/presentation/screens/material_summary_screen.dart';
 import 'package:klyra/features/tutor/presentation/tutor_session_screen.dart';
 
@@ -59,6 +60,23 @@ GoRouter appRouter(Ref ref) {
           final courseId = state.pathParameters['courseId']!;
           final topicId = state.pathParameters['topicId']!;
           return MaterialSummaryScreen(courseId: courseId, topicId: topicId);
+        },
+      ),
+      GoRoute(
+        path: '/course/:courseId/topic/:topicId/material/:materialId/review',
+        builder: (context, state) {
+          final courseId = state.pathParameters['courseId']!;
+          final topicId = state.pathParameters['topicId']!;
+          final materialId = state.pathParameters['materialId']!;
+          final materialName = state.uri.queryParameters['name'] ?? 'Material';
+          final courseName = state.uri.queryParameters['course'] ?? 'Curso';
+          return MaterialReviewScreen(
+            courseId: courseId,
+            topicId: topicId,
+            materialId: materialId,
+            materialName: materialName,
+            courseName: courseName,
+          );
         },
       ),
     ],

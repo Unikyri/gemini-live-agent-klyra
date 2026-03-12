@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -7,7 +8,10 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:klyra/core/network/dio_client.dart';
 import 'package:klyra/features/course/data/course_repository.dart';
+import 'package:klyra/features/tutor/data/audio_amplitude_tracker.dart';
 import 'package:klyra/features/tutor/data/gemini_live_service.dart';
+import 'package:klyra/features/tutor/data/vad_detector.dart';
+import 'package:klyra/features/tutor/presentation/widgets/rive_avatar_widget.dart';
 
 part 'tutor_session_controller.g.dart';
 
@@ -27,6 +31,9 @@ class TutorSessionState {
   final Set<String> loadedTopicIds;
   final bool isLoadingContext;
   final bool hasCurrentTopicMaterials;
+  final bool isBargeInActive;
+  final String backgroundContextType;
+  final TutorAvatarState avatarState;
 
   const TutorSessionState({
     this.sessionState = SessionState.idle,
@@ -37,6 +44,9 @@ class TutorSessionState {
     Set<String>? loadedTopicIds,
     this.isLoadingContext = false,
     this.hasCurrentTopicMaterials = true,
+    this.isBargeInActive = false,
+    this.backgroundContextType = 'default',
+    this.avatarState = TutorAvatarState.idle,
   }) : loadedTopicIds = loadedTopicIds ?? const {};
 
   TutorSessionState copyWith({
@@ -48,6 +58,9 @@ class TutorSessionState {
     Set<String>? loadedTopicIds,
     bool? isLoadingContext,
     bool? hasCurrentTopicMaterials,
+    bool? isBargeInActive,
+    String? backgroundContextType,
+    TutorAvatarState? avatarState,
   }) {
     return TutorSessionState(
       sessionState: sessionState ?? this.sessionState,
@@ -59,6 +72,9 @@ class TutorSessionState {
       isLoadingContext: isLoadingContext ?? this.isLoadingContext,
       hasCurrentTopicMaterials:
           hasCurrentTopicMaterials ?? this.hasCurrentTopicMaterials,
+      isBargeInActive: isBargeInActive ?? this.isBargeInActive,
+      backgroundContextType: backgroundContextType ?? this.backgroundContextType,
+      avatarState: avatarState ?? this.avatarState,
     );
   }
 }
@@ -77,14 +93,53 @@ class TutorSessionController extends _$TutorSessionController {
     defaultValue: '',
   );
 
+  static const bool _ffLearningProfile = bool.fromEnvironment(
+    'FF_LEARNING_PROFILE',
+    defaultValue: false,
+  );
+  static const bool _ffBargeIn = bool.fromEnvironment(
+    'FF_BARGE_IN',
+    defaultValue: false,
+  );
+  static const bool _ffAvatarRive = bool.fromEnvironment(
+    'FF_AVATAR_RIVE',
+    defaultValue: false,
+  );
+  static const bool _ffDynamicBackgrounds = bool.fromEnvironment(
+    'FF_DYNAMIC_BACKGROUNDS',
+    defaultValue: false,
+  );
+  static const bool _ffCameraSnapshot = bool.fromEnvironment(
+    'FF_CAMERA_SNAPSHOT',
+    defaultValue: false,
+  );
+
+  static const int _learningProfileUpdateInterval = int.fromEnvironment(
+    'LEARNING_PROFILE_UPDATE_INTERVAL',
+    defaultValue: 10,
+  );
+
   late GeminiLiveService _geminiService;
   AudioRecorder? _recorder;
   AudioPlayer? _player;
+  VadDetector? _vad;
+  StreamSubscription<bool>? _vadSub;
+  final _amplitudeTracker = AudioAmplitudeTracker();
+  final _amplitudeController = StreamController<double>.broadcast();
+  Stream<double> get amplitudeStream => _amplitudeController.stream;
+
+  StreamSubscription<String>? _backgroundSub;
+  StreamSubscription<double>? _amplitudeSub;
 
   StreamSubscription<SessionState>? _stateSub;
   StreamSubscription<Uint8List>? _audioSub;
   StreamSubscription<String>? _transcriptSub;
   StreamSubscription<List<int>>? _audioMicSub; // mic stream subscription
+
+  final List<String> _recentTranscriptChunks = [];
+  int _profileChunkCounter = 0;
+  final _audioSessionChannel = const MethodChannel('klyra/audio_session');
+  bool _micDesired = false;
 
   @override
   TutorSessionState build() {
@@ -107,6 +162,7 @@ class TutorSessionController extends _$TutorSessionController {
       return;
     }
     state = state.copyWith(sessionState: SessionState.connecting, error: null);
+    _micDesired = true;
 
     try {
       final repo = ref.read(courseRepositoryProvider);
@@ -115,14 +171,38 @@ class TutorSessionController extends _$TutorSessionController {
 
       _stateSub = _geminiService.stateStream.listen((s) {
         state = state.copyWith(sessionState: s);
+        state = state.copyWith(
+          avatarState: switch (s) {
+            SessionState.speaking => TutorAvatarState.speaking,
+            SessionState.reconnecting => TutorAvatarState.reconnecting,
+            SessionState.connecting => TutorAvatarState.thinking,
+            SessionState.error => TutorAvatarState.thinking,
+            _ => TutorAvatarState.idle,
+          },
+        );
+        if (s == SessionState.reconnecting) {
+          unawaited(_stopMicrophone());
+        }
+        if (s == SessionState.active && _micDesired && !state.isMicrophoneActive) {
+          unawaited(_startMicrophone());
+        }
       });
       _audioSub = _geminiService.audioOutputStream.listen((audioBytes) {
         _player?.play(BytesSource(audioBytes));
+        _amplitudeTracker.processAudioChunk(audioBytes);
       });
+      _backgroundSub = _geminiService.backgroundContextStream.listen((ctx) {
+        if (_ffDynamicBackgrounds) {
+          state = state.copyWith(backgroundContextType: ctx);
+        }
+      });
+      _amplitudeSub ??=
+          _amplitudeTracker.amplitudeStream.listen(_amplitudeController.add);
       var fullTranscript = '';
       _transcriptSub = _geminiService.transcriptStream.listen((chunk) {
         fullTranscript += chunk;
         state = state.copyWith(transcript: fullTranscript);
+        _trackAndMaybeUpdateLearningProfile(chunk);
       });
 
       await _geminiService.connect(
@@ -137,6 +217,7 @@ class TutorSessionController extends _$TutorSessionController {
 
       _recorder ??= AudioRecorder();
       _player ??= AudioPlayer();
+      await _configureAec();
       await _startMicrophone();
     } catch (e) {
       debugPrint('[TutorSession] startSession error: $e');
@@ -223,12 +304,54 @@ class TutorSessionController extends _$TutorSessionController {
 
   /// Stop the tutoring session and release all resources.
   Future<void> stopSession() async {
+    await _flushLearningProfileUpdate();
+    _micDesired = false;
     await _stopMicrophone();
+    await _resetAec();
     await _geminiService.disconnect();
     state = state.copyWith(
       sessionState: SessionState.idle,
       isMicrophoneActive: false,
     );
+  }
+
+  void _trackAndMaybeUpdateLearningProfile(String chunk) {
+    if (!_ffLearningProfile) return;
+    final cleaned = chunk.trim();
+    if (cleaned.isEmpty) return;
+    _recentTranscriptChunks.add(cleaned);
+    if (_recentTranscriptChunks.length > 50) {
+      _recentTranscriptChunks.removeRange(
+        0,
+        _recentTranscriptChunks.length - 50,
+      );
+    }
+    _profileChunkCounter++;
+    if (_profileChunkCounter >= _learningProfileUpdateInterval) {
+      _profileChunkCounter = 0;
+      unawaited(_sendLearningProfileUpdate(_recentTranscriptChunks.takeLast(20)));
+    }
+  }
+
+  Future<void> _flushLearningProfileUpdate() async {
+    if (!_ffLearningProfile) return;
+    final batch = _recentTranscriptChunks.takeLast(20);
+    if (batch.isEmpty) return;
+    await _sendLearningProfileUpdate(batch);
+    _recentTranscriptChunks.clear();
+    _profileChunkCounter = 0;
+  }
+
+  Future<void> _sendLearningProfileUpdate(List<String> recent) async {
+    try {
+      final dio = ref.read(dioClientProvider);
+      await dio.post(
+        '/users/me/learning-profile/update',
+        data: {'recent_messages': recent},
+      );
+    } catch (e) {
+      debugPrint('[LearningProfile] update failed: $e');
+    }
   }
 
   Future<void> _startMicrophone() async {
@@ -254,15 +377,70 @@ class TutorSessionController extends _$TutorSessionController {
     final audioStream = await recorder.startStream(config);
     state = state.copyWith(isMicrophoneActive: true);
 
+    _vad ??= RmsVadDetector();
+    _vadSub ??= _vad!.isSpeakingStream.listen((isSpeaking) {
+      if (!_ffBargeIn) return;
+      if (isSpeaking && state.sessionState == SessionState.speaking) {
+        unawaited(_triggerBargeIn());
+      }
+    });
+
     // Store subscription so it can be cancelled on stopSession()
     _audioMicSub = audioStream.listen((audioChunk) {
       _geminiService.sendAudioChunk(Uint8List.fromList(audioChunk));
+      _vad?.processAudioChunk(Uint8List.fromList(audioChunk));
     });
   }
 
   Future<void> _stopMicrophone() async {
+    await _audioMicSub?.cancel();
+    _audioMicSub = null;
     await _recorder?.stop();
     state = state.copyWith(isMicrophoneActive: false);
+  }
+
+  Future<void> sendSnapshotToTutor(String base64Jpeg) async {
+    if (!_ffCameraSnapshot) return;
+    _geminiService.sendImageData(
+      base64Jpeg: base64Jpeg,
+      promptText: 'Mira mis apuntes y explícame lo que ves',
+    );
+  }
+
+  Future<void> _triggerBargeIn() async {
+    state = state.copyWith(
+      isBargeInActive: true,
+      avatarState: TutorAvatarState.listening,
+    );
+
+    try {
+      await _player?.stop();
+      await _player?.release();
+      _player = AudioPlayer();
+    } catch (e) {
+      debugPrint('[BargeIn] stop/release failed: $e');
+    } finally {
+      Future<void>.delayed(const Duration(milliseconds: 600), () {
+        if (!ref.mounted) return;
+        state = state.copyWith(isBargeInActive: false);
+      });
+    }
+  }
+
+  Future<void> _configureAec() async {
+    try {
+      await _audioSessionChannel.invokeMethod('setVoiceChatMode');
+    } catch (e) {
+      debugPrint('[AEC] configure failed: $e');
+    }
+  }
+
+  Future<void> _resetAec() async {
+    try {
+      await _audioSessionChannel.invokeMethod('resetAudioMode');
+    } catch (e) {
+      debugPrint('[AEC] reset failed: $e');
+    }
   }
 
   Future<void> _cleanup() async {
@@ -270,9 +448,23 @@ class TutorSessionController extends _$TutorSessionController {
     await _audioSub?.cancel();
     await _transcriptSub?.cancel();
     await _audioMicSub?.cancel(); // prevent mic stream leak
+    await _vadSub?.cancel();
+    _vad?.dispose();
+    await _backgroundSub?.cancel();
+    await _amplitudeTracker.dispose();
+    await _amplitudeSub?.cancel();
+    await _amplitudeController.close();
     await _recorder?.dispose();
     await _player?.dispose();
     await _geminiService.disconnect(); // await async disconnect
     _geminiService.dispose();
+  }
+}
+
+extension<T> on List<T> {
+  List<T> takeLast(int n) {
+    if (n <= 0) return const [];
+    if (length <= n) return List<T>.from(this);
+    return sublist(length - n);
   }
 }

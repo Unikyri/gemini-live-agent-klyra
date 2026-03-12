@@ -6,6 +6,9 @@ import 'package:klyra/features/course/domain/course_models.dart';
 import 'package:klyra/features/course/presentation/course_controller.dart';
 import 'package:klyra/features/tutor/data/gemini_live_service.dart';
 import 'package:klyra/features/tutor/presentation/tutor_session_controller.dart';
+import 'package:klyra/features/tutor/presentation/widgets/camera_snapshot_button.dart';
+import 'package:klyra/features/tutor/presentation/widgets/dynamic_background.dart';
+import 'package:klyra/features/tutor/presentation/widgets/rive_avatar_widget.dart';
 
 class TutorSessionScreen extends ConsumerStatefulWidget {
   final String courseId;
@@ -56,6 +59,43 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
     final coursesAsync = ref.watch(courseControllerProvider);
     final theme = Theme.of(context);
 
+    ref.listen(tutorSessionControllerProvider, (prev, next) {
+      if ((prev?.sessionState != SessionState.error) &&
+          next.sessionState == SessionState.error) {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Conexión interrumpida'),
+            content: const Text(
+              'No se pudo reconectar automáticamente. ¿Quieres reintentar o volver al curso?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cerrar'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  ref
+                      .read(tutorSessionControllerProvider.notifier)
+                      .startSession(widget.courseId, topicId: widget.topicId);
+                },
+                child: const Text('Reconectar'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).maybePop();
+                },
+                child: const Text('Volver'),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+
     final Course? course = coursesAsync.whenOrNull(data: (d) => d)
         ?.where((c) => c.id == widget.courseId)
         .firstOrNull;
@@ -69,6 +109,25 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
         sessionState.sessionState == SessionState.connecting;
     final bool isSpeaking =
         sessionState.sessionState == SessionState.speaking;
+    final bool isReconnecting =
+        sessionState.sessionState == SessionState.reconnecting;
+
+    const ffAvatarRive = bool.fromEnvironment(
+      'FF_AVATAR_RIVE',
+      defaultValue: false,
+    );
+    const ffDynamicBackgrounds = bool.fromEnvironment(
+      'FF_DYNAMIC_BACKGROUNDS',
+      defaultValue: false,
+    );
+    const ffCameraSnapshot = bool.fromEnvironment(
+      'FF_CAMERA_SNAPSHOT',
+      defaultValue: false,
+    );
+    const ffBargeIn = bool.fromEnvironment(
+      'FF_BARGE_IN',
+      defaultValue: false,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A1A),
@@ -89,6 +148,13 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
         ),
         actions: [
           if (isActive)
+            CameraSnapshotButton(
+              enabled: ffCameraSnapshot && !isReconnecting,
+              onCaptured: (b64) => ref
+                  .read(tutorSessionControllerProvider.notifier)
+                  .sendSnapshotToTutor(b64),
+            ),
+          if (isActive)
             TextButton.icon(
               onPressed: () =>
                   ref.read(tutorSessionControllerProvider.notifier).stopSession(),
@@ -98,8 +164,14 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
+            DynamicBackground(
+              enabled: ffDynamicBackgrounds,
+              contextType: sessionState.backgroundContextType,
+            ),
+            Column(
+              children: [
             // --- Topic selector (chips) and "Curso completo" ---
             if (course != null && course!.topics.isNotEmpty && isActive) ...[
               Padding(
@@ -164,17 +236,66 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
                 ),
             ],
 
-            // --- Avatar Display Area ---
-            Expanded(
-              flex: 6,
-              child: _AvatarDisplay(
-                avatarUrl: course?.avatarModelUrl,
-                isSpeaking: isSpeaking,
-                pulseAnim: _pulseAnim,
-                waveController: _waveController,
-                sessionState: sessionState.sessionState,
-              ),
-            ),
+                // --- Avatar Display Area ---
+                Expanded(
+                  flex: 6,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (ffAvatarRive)
+                        Center(
+                          child: SizedBox(
+                            width: 260,
+                            height: 260,
+                            child: RiveAvatarWidget(
+                              amplitudeStream: ref
+                                  .read(tutorSessionControllerProvider.notifier)
+                                  .amplitudeStream,
+                              avatarState: sessionState.avatarState,
+                            ),
+                          ),
+                        )
+                      else
+                        _AvatarDisplay(
+                          avatarUrl: course?.avatarModelUrl,
+                          isSpeaking: isSpeaking,
+                          pulseAnim: _pulseAnim,
+                          waveController: _waveController,
+                          sessionState: sessionState.sessionState,
+                        ),
+                      if (ffBargeIn && sessionState.isBargeInActive)
+                        Positioned(
+                          top: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.greenAccent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.greenAccent.withOpacity(0.5),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.mic, size: 16, color: Colors.greenAccent),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Interrupción (barge-in)',
+                                  style: TextStyle(
+                                    color: Colors.greenAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
 
             // --- Transcript Area ---
             if (sessionState.transcript.isNotEmpty)
@@ -203,20 +324,22 @@ class _TutorSessionScreenState extends ConsumerState<TutorSessionScreen>
                 ),
               ),
 
-            // --- Mic Button ---
-            Padding(
-              padding: const EdgeInsets.only(bottom: 40, top: 16),
-              child: _MicButton(
-                isActive: isActive,
-                isConnecting: isConnecting,
-                isMicOn: sessionState.isMicrophoneActive,
-                onStart: () => ref
-                    .read(tutorSessionControllerProvider.notifier)
-                    .startSession(widget.courseId, topicId: widget.topicId),
-                onStop: () => ref
-                    .read(tutorSessionControllerProvider.notifier)
-                    .stopSession(),
-              ),
+                // --- Mic Button ---
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 40, top: 16),
+                  child: _MicButton(
+                    isActive: isActive || isReconnecting,
+                    isConnecting: isConnecting || isReconnecting,
+                    isMicOn: sessionState.isMicrophoneActive && !isReconnecting,
+                    onStart: () => ref
+                        .read(tutorSessionControllerProvider.notifier)
+                        .startSession(widget.courseId, topicId: widget.topicId),
+                    onStop: () => ref
+                        .read(tutorSessionControllerProvider.notifier)
+                        .stopSession(),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -346,6 +469,7 @@ class _StatusBadge extends StatelessWidget {
       SessionState.connecting => ('Connecting...', Colors.orangeAccent),
       SessionState.active => ('Listening...', Colors.greenAccent),
       SessionState.speaking => ('Klyra is speaking', const Color(0xFF6C63FF)),
+      SessionState.reconnecting => ('Reconnecting...', Colors.orangeAccent),
       SessionState.error => ('Error', Colors.redAccent),
     };
 

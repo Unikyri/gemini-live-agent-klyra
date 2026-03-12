@@ -48,6 +48,25 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*domain.User,
 	return r.GetUserByID(parsedID)
 }
 
+// UpdateLearningProfile updates the JSONB learning_profile for a user.
+func (r *UserRepository) UpdateLearningProfile(ctx context.Context, id string, profile map[string]interface{}) error {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid user id: %w", err)
+	}
+	res := r.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Where("id = ? AND deleted_at IS NULL", parsedID).
+		Update("learning_profile", profile)
+	if res.Error != nil {
+		return fmt.Errorf("failed to update learning profile: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // CreateUser persists a new user from OAuth provider data.
 func (r *UserRepository) CreateUser(user *domain.User) error {
 	if user.ID == uuid.Nil {

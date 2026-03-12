@@ -29,6 +29,25 @@ type PostgreSQLRepository struct {
 	config postgresConfig
 }
 
+// NewPostgreSQLRepositoryFromURL creates a new PostgreSQL connection using a raw PostgreSQL URI.
+// This is designed for PaaS providers (e.g., Heroku) that provide DATABASE_URL in the form:
+//   postgres://user:pass@host:port/dbname?sslmode=require&...
+// The underlying driver (pgx) can parse this URI directly.
+func NewPostgreSQLRepositoryFromURL(databaseURL string) (ports.DBRepository, error) {
+	if strings.TrimSpace(databaseURL) == "" {
+		return nil, fmt.Errorf("database url is empty")
+	}
+
+	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
+	}
+
+	return &PostgreSQLRepository{
+		db: db,
+	}, nil
+}
+
 // NewPostgreSQLRepository creates a new PostgreSQL connection using the provided configuration.
 // This is the "local" mode implementation for development environments.
 func NewPostgreSQLRepository(host, port, database, user, password, sslMode string) (ports.DBRepository, error) {

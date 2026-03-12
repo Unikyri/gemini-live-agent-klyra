@@ -38,6 +38,35 @@ func (m *MockMaterialUseCase) GetMaterialsByTopic(ctx context.Context, courseID,
 	return args.Get(0).([]domain.Material), args.Error(1)
 }
 
+func (m *MockMaterialUseCase) GetMaterialInterpretation(ctx context.Context, courseID, topicID, materialID, userID string) (*domain.InterpretationResult, error) {
+	args := m.Called(ctx, courseID, topicID, materialID, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.InterpretationResult), args.Error(1)
+}
+
+func (m *MockMaterialUseCase) CreateCorrection(ctx context.Context, in usecases.CreateCorrectionInput) (*domain.MaterialCorrection, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.MaterialCorrection), args.Error(1)
+}
+
+func (m *MockMaterialUseCase) ListCorrections(ctx context.Context, courseID, topicID, materialID, userID string) ([]domain.MaterialCorrection, error) {
+	args := m.Called(ctx, courseID, topicID, materialID, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.MaterialCorrection), args.Error(1)
+}
+
+func (m *MockMaterialUseCase) DeleteCorrection(ctx context.Context, courseID, topicID, materialID, correctionID, userID string) error {
+	args := m.Called(ctx, courseID, topicID, materialID, correctionID, userID)
+	return args.Error(0)
+}
+
 func setupMaterialRouter(mockUC *MockMaterialUseCase) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -113,6 +142,99 @@ func setupMaterialRouter(mockUC *MockMaterialUseCase) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, gin.H{"materials": materials, "total": len(materials)})
 	})
+
+	api.GET("/courses/:course_id/topics/:topic_id/materials/:material_id/interpretation", func(c *gin.Context) {
+		userIDVal, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		userID := userIDVal.(string)
+		courseID := c.Param("course_id")
+		topicID := c.Param("topic_id")
+		materialID := c.Param("material_id")
+		res, err := mockUC.GetMaterialInterpretation(c.Request.Context(), courseID, topicID, materialID, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not retrieve interpretation"})
+			return
+		}
+		if res == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "interpretation not found"})
+			return
+		}
+		c.JSON(http.StatusOK, res)
+	})
+
+	api.POST("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections", func(c *gin.Context) {
+		userIDVal, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		var req struct {
+			BlockIndex    int    `json:"block_index"`
+			OriginalText  string `json:"original_text"`
+			CorrectedText string `json:"corrected_text"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		userID := userIDVal.(string)
+		out, err := mockUC.CreateCorrection(c.Request.Context(), usecases.CreateCorrectionInput{
+			UserID:        userID,
+			CourseID:      c.Param("course_id"),
+			TopicID:       c.Param("topic_id"),
+			MaterialID:    c.Param("material_id"),
+			BlockIndex:    req.BlockIndex,
+			OriginalText:  req.OriginalText,
+			CorrectedText: req.CorrectedText,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create correction"})
+			return
+		}
+		if out == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "material or interpretation not found"})
+			return
+		}
+		c.JSON(http.StatusCreated, out)
+	})
+
+	api.GET("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections", func(c *gin.Context) {
+		userIDVal, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		userID := userIDVal.(string)
+		items, err := mockUC.ListCorrections(c.Request.Context(), c.Param("course_id"), c.Param("topic_id"), c.Param("material_id"), userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list corrections"})
+			return
+		}
+		if items == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "material not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"corrections": items, "total": len(items)})
+	})
+
+	api.DELETE("/courses/:course_id/topics/:topic_id/materials/:material_id/corrections/:correction_id", func(c *gin.Context) {
+		userIDVal, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		userID := userIDVal.(string)
+		err := mockUC.DeleteCorrection(c.Request.Context(), c.Param("course_id"), c.Param("topic_id"), c.Param("material_id"), c.Param("correction_id"), userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not delete correction"})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+
 	return router
 }
 
@@ -269,4 +391,73 @@ func TestValidateMaterialFile_ExtensionFirstRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetInterpretation_404WhenMissing(t *testing.T) {
+	mockUC := new(MockMaterialUseCase)
+	courseID := uuid.New()
+	topicID := uuid.New()
+	materialID := uuid.New()
+	userID := uuid.New()
+
+	mockUC.On("GetMaterialInterpretation", mock.Anything, courseID.String(), topicID.String(), materialID.String(), userID.String()).
+		Return((*domain.InterpretationResult)(nil), nil)
+
+	router := setupMaterialRouter(mockUC)
+	req := httptest.NewRequest("GET", "/api/v1/courses/"+courseID.String()+"/topics/"+topicID.String()+"/materials/"+materialID.String()+"/interpretation", nil)
+	req.Header.Set("X-Test-User-ID", userID.String())
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	mockUC.AssertExpectations(t)
+}
+
+func TestCorrections_CRUD_HappyPath(t *testing.T) {
+	mockUC := new(MockMaterialUseCase)
+	courseID := uuid.New()
+	topicID := uuid.New()
+	materialID := uuid.New()
+	userID := uuid.New()
+	correctionID := uuid.New()
+
+	created := &domain.MaterialCorrection{
+		ID:            correctionID,
+		MaterialID:    materialID,
+		BlockIndex:    1,
+		OriginalText:  "Z",
+		CorrectedText: "Z",
+	}
+	mockUC.On("CreateCorrection", mock.Anything, mock.Anything).
+		Return(created, nil)
+	mockUC.On("ListCorrections", mock.Anything, courseID.String(), topicID.String(), materialID.String(), userID.String()).
+		Return([]domain.MaterialCorrection{*created}, nil)
+	mockUC.On("DeleteCorrection", mock.Anything, courseID.String(), topicID.String(), materialID.String(), correctionID.String(), userID.String()).
+		Return(nil)
+
+	router := setupMaterialRouter(mockUC)
+
+	// Create
+	body := bytes.NewBufferString(`{"block_index":1,"original_text":"Z","corrected_text":"Z"}`)
+	req := httptest.NewRequest("POST", "/api/v1/courses/"+courseID.String()+"/topics/"+topicID.String()+"/materials/"+materialID.String()+"/corrections", body)
+	req.Header.Set("X-Test-User-ID", userID.String())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// List
+	req2 := httptest.NewRequest("GET", "/api/v1/courses/"+courseID.String()+"/topics/"+topicID.String()+"/materials/"+materialID.String()+"/corrections", nil)
+	req2.Header.Set("X-Test-User-ID", userID.String())
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	// Delete
+	req3 := httptest.NewRequest("DELETE", "/api/v1/courses/"+courseID.String()+"/topics/"+topicID.String()+"/materials/"+materialID.String()+"/corrections/"+correctionID.String(), nil)
+	req3.Header.Set("X-Test-User-ID", userID.String())
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+	assert.Equal(t, http.StatusNoContent, w3.Code)
+
+	mockUC.AssertExpectations(t)
 }

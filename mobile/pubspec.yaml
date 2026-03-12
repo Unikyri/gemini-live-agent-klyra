@@ -50,6 +50,11 @@ dependencies:
   flutter_markdown: ^0.7.3
   flutter_math_fork: ^0.7.4
   markdown: ^7.3.0
+  pdf: ^3.11.3
+  share_plus: ^11.1.0
+  path_provider: ^2.1.4
+  rive: ^0.13.20
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

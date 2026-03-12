@@ -36,6 +36,10 @@ const _$MaterialFormatTypeEnumMap = {
   MaterialFormatType.pdf: 'pdf',
   MaterialFormatType.txt: 'txt',
   MaterialFormatType.md: 'md',
+  MaterialFormatType.png: 'png',
+  MaterialFormatType.jpg: 'jpg',
+  MaterialFormatType.jpeg: 'jpeg',
+  MaterialFormatType.webp: 'webp',
   MaterialFormatType.audio: 'audio',
 };
 
@@ -43,5 +47,6 @@ const _$MaterialStatusEnumMap = {
   MaterialStatus.pending: 'pending',
   MaterialStatus.processing: 'processing',
   MaterialStatus.validated: 'validated',
+  MaterialStatus.interpreted: 'interpreted',
   MaterialStatus.rejected: 'rejected',
 };

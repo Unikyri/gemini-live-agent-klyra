@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import 'package:klyra/core/config/env.dart';
 import 'package:klyra/core/network/dio_client.dart';
 import 'package:klyra/features/auth/domain/auth_models.dart';
 
@@ -17,9 +18,8 @@ AuthRemoteDataSource authRemoteDataSource(Ref ref) {
   if (!kIsWeb) {
     // For Android, google_sign_in expects the Web OAuth client as serverClientId
     // to issue an ID token with the correct audience (`aud`).
-    const webServerClientId = '782011204480-0eejl4shc1f9n360mln5secbeng6k5gb.apps.googleusercontent.com';
     googleSignIn = GoogleSignIn(
-      serverClientId: webServerClientId,
+      serverClientId: EnvInfo.googleWebClientId,
       scopes: ['email', 'profile'],
     );
   }

@@ -39,3 +39,17 @@ type TextExtractor interface {
 	// ExtractFromAudio runs speech-to-text over audio bytes.
 	ExtractFromAudio(ctx context.Context, audioData []byte, mimeType string) (transcript string, err error)
 }
+
+// MaterialInterpreter provides structured multimodal interpretation (blocks, LaTeX, transcripts).
+// Implementations may call Vertex AI Gemini multimodal models.
+type MaterialInterpreter interface {
+	Interpret(ctx context.Context, gcsURI string, formatType domain.MaterialFormatType) (*domain.InterpretationResult, error)
+}
+
+// CorrectionRepository stores user overrides for interpreted blocks.
+type CorrectionRepository interface {
+	Create(ctx context.Context, correction *domain.MaterialCorrection) error
+	FindByMaterial(ctx context.Context, materialID string) ([]domain.MaterialCorrection, error)
+	FindByChunkIDs(ctx context.Context, chunkIDs []string) ([]domain.MaterialCorrection, error)
+	Delete(ctx context.Context, correctionID string) error
+}

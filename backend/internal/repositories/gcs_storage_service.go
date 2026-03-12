@@ -40,8 +40,15 @@ func (s *GCSStorageService) UploadFile(ctx context.Context, bucket, objectName s
 		bucket = s.bucketName
 	}
 
-	// The GCS client automatically uses GOOGLE_APPLICATION_CREDENTIALS / ADC.
-	client, err := storage.NewClient(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
+	scopes := []string{"https://www.googleapis.com/auth/cloud-platform"}
+	opts, err := ResolveGoogleClientOptions(scopes...)
+	if err != nil {
+		return "", err
+	}
+
+	// The GCS client automatically uses GOOGLE_APPLICATION_CREDENTIALS / ADC, but we also support
+	// inline JSON credentials via env vars for Heroku.
+	client, err := storage.NewClient(ctx, append(opts, option.WithScopes(scopes...))...)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GCS client: %w", err)
 	}
