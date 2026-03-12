@@ -19,7 +19,7 @@ ALTER TABLE materials
 CREATE TABLE IF NOT EXISTS material_corrections (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     material_id    UUID NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
-    chunk_id       UUID NULL REFERENCES chunks(id) ON DELETE SET NULL,
+    chunk_id UUID NULL REFERENCES material_chunks(id) ON DELETE SET NULL,
     block_index    INT  NOT NULL,
     original_text  TEXT NOT NULL,
     corrected_text TEXT NOT NULL,
