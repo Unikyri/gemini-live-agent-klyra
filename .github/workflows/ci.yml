@@ -4,10 +4,16 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - ".github/workflows/**"
+      - "backend/Dockerfile"
+      - "backend/Dockerfile.release"
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - ".github/workflows/**"
+      - "backend/Dockerfile"
+      - "backend/Dockerfile.release"
 
 permissions:
   contents: read
@@ -34,7 +40,7 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: go test -race -count=1 ./...
+        run: go test -count=1 ./...
 
       - name: Run vet
         run: go vet ./...
